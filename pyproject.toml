@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "scibmad"
+version = "0.1.0"
+description = "Python interface to the SciBmad.jl accelerator physics simulation ecosystem"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "GPL-3.0-or-later" }
+authors = [
+    { name = "The SciBmad developers" },
+]
+keywords = ["accelerator", "physics", "simulation", "beam", "twiss", "bmad"]
+dependencies = [
+    # juliacall provides the Julia runtime bridge and pulls in juliapkg,
+    # which reads scibmad/juliapkg.json to install the LTS Julia + SciBmad.jl.
+    "juliacall >=0.9.20",
+]
+
+[project.optional-dependencies]
+test = ["pytest >=7"]
+
+[project.urls]
+Homepage = "https://github.com/bmad-sim/SciBmad.jl"
+Issues = "https://github.com/bmad-sim/SciBmad.jl/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/scibmad"]
+
+# Ship the Julia dependency manifest inside the package so juliapkg finds it.
+[tool.hatch.build.targets.wheel.force-include]
+"src/scibmad/juliapkg.json" = "scibmad/juliapkg.json"
+"src/scibmad/_glue.jl" = "scibmad/_glue.jl"

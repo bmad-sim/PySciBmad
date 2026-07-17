@@ -1,0 +1,13 @@
+{
+    "julia": "~1.10",
+    "packages": {
+        "SciBmad": {
+            "uuid": "7bf6e793-a2ec-421f-8700-d1465381ee80",
+            "version": "~0.4.2"
+        },
+        "PythonCall": {
+            "uuid": "6099a3de-0909-46bc-b1f4-468b9a2dfc0d",
+            "version": "0.9"
+        }
+    }
+}

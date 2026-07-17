@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>scibmad — Python interface to SciBmad.jl</title>
+  <meta name="description" content="Documentation for scibmad, the Python interface to the SciBmad.jl accelerator physics simulation ecosystem.">
+</head>
+<body>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --panel-2: #fbfcfd;
+    --ink: #161c27;
+    --muted: #58626f;
+    --faint: #8a93a1;
+    --border: #e4e8ee;
+    --border-strong: #d3d9e2;
+    --accent: #a86c15;
+    --accent-bright: #b8791b;
+    --accent-soft: #f5ead4;
+    --accent-line: #e6d3a8;
+    --good: #2f8f5b;
+    --good-soft: #e4f3ea;
+    --code-bg: #0d1119;
+    --code-panel: #10151f;
+    --code-ink: #d9dce4;
+    --code-dim: #7b8497;
+    --code-amber: #e6a83c;
+    --code-green: #7fd39b;
+    --code-blue: #78b7e6;
+    --code-purple: #c39be8;
+    --shadow: 0 1px 2px rgba(20,28,40,.05), 0 8px 30px rgba(20,28,40,.06);
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #0e1116;
+      --panel: #161b22;
+      --panel-2: #12161d;
+      --ink: #e8ecf2;
+      --muted: #9aa4b2;
+      --faint: #6b7482;
+      --border: #232a34;
+      --border-strong: #313a47;
+      --accent: #e6a83c;
+      --accent-bright: #efb653;
+      --accent-soft: #2a2115;
+      --accent-line: #4a3a1c;
+      --good: #56c98a;
+      --good-soft: #14251b;
+      --code-bg: #090c12;
+      --code-panel: #0c1017;
+      --code-ink: #d9dce4;
+      --code-dim: #6b7486;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 34px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #f6f7f9; --panel: #ffffff; --panel-2: #fbfcfd; --ink: #161c27;
+    --muted: #58626f; --faint: #8a93a1; --border: #e4e8ee; --border-strong: #d3d9e2;
+    --accent: #a86c15; --accent-bright: #b8791b; --accent-soft: #f5ead4; --accent-line: #e6d3a8;
+    --good: #2f8f5b; --good-soft: #e4f3ea; --code-bg: #0d1119; --code-panel: #10151f;
+    --shadow: 0 1px 2px rgba(20,28,40,.05), 0 8px 30px rgba(20,28,40,.06);
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0e1116; --panel: #161b22; --panel-2: #12161d; --ink: #e8ecf2;
+    --muted: #9aa4b2; --faint: #6b7482; --border: #232a34; --border-strong: #313a47;
+    --accent: #e6a83c; --accent-bright: #efb653; --accent-soft: #2a2115; --accent-line: #4a3a1c;
+    --good: #56c98a; --good-soft: #14251b; --code-bg: #090c12; --code-panel: #0c1017;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 34px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16.5px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  code, kbd, pre, .mono, .eyebrow, .toc a, .badge, .kbd {
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 2px; }
+  :focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; border-radius: 3px; }
+
+  /* ---- shell ---- */
+  .shell {
+    display: grid;
+    grid-template-columns: 244px minmax(0, 1fr);
+    gap: 0;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 clamp(16px, 4vw, 40px);
+  }
+
+  .sidebar {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 34px 26px 34px 0;
+    border-right: 1px solid var(--border);
+  }
+  .brand {
+    display: flex; align-items: baseline; gap: 8px;
+    font-weight: 700; font-size: 1.15rem; letter-spacing: -.01em;
+    margin-bottom: 2px;
+  }
+  .brand .dot { color: var(--accent); }
+  .brand-sub { font-size: .74rem; color: var(--faint); letter-spacing: .04em; margin-bottom: 26px; }
+
+  .toc { list-style: none; margin: 0; padding: 0; }
+  .toc li { margin: 0; }
+  .toc a {
+    display: block;
+    font-size: .74rem;
+    letter-spacing: .02em;
+    color: var(--muted);
+    padding: 6px 12px;
+    border-left: 2px solid transparent;
+    margin-left: -2px;
+    transition: color .15s, border-color .15s;
+  }
+  .toc a:hover { color: var(--ink); text-decoration: none; }
+  .toc a.active { color: var(--accent-bright); border-left-color: var(--accent-bright); }
+  .toc .num { color: var(--faint); margin-right: 8px; }
+  .toc a.active .num { color: var(--accent); }
+
+  .content {
+    padding: 40px clamp(4px, 3vw, 44px) 120px;
+    min-width: 0;
+  }
+  .prose { max-width: 72ch; }
+
+  /* ---- hero ---- */
+  .hero { padding-bottom: 8px; margin-bottom: 30px; border-bottom: 1px solid var(--border); }
+  .eyebrow {
+    font-size: .72rem; text-transform: uppercase; letter-spacing: .18em;
+    color: var(--accent); margin-bottom: 16px;
+  }
+  h1 {
+    font-size: clamp(2.1rem, 5vw, 2.9rem);
+    line-height: 1.08; letter-spacing: -.025em; font-weight: 760;
+    margin: 0 0 14px; text-wrap: balance;
+  }
+  h1 .mono-name {
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+    color: var(--accent-bright); font-size: .82em; font-weight: 600;
+  }
+  .lede { font-size: 1.12rem; color: var(--muted); max-width: 60ch; margin: 0 0 24px; }
+
+  .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: .72rem; letter-spacing: .02em;
+    padding: 5px 11px; border-radius: 999px;
+    border: 1px solid var(--border-strong); background: var(--panel);
+    color: var(--muted);
+  }
+  .badge b { color: var(--ink); font-weight: 600; }
+  .badge .k { color: var(--accent); }
+
+  /* ---- sections ---- */
+  section { scroll-margin-top: 24px; padding-top: 44px; }
+  h2 {
+    font-size: 1.5rem; letter-spacing: -.015em; font-weight: 700;
+    margin: 0 0 6px; display: flex; align-items: baseline; gap: 12px;
+  }
+  h2 .h-num {
+    font-family: ui-monospace, monospace; font-size: .78rem; font-weight: 500;
+    color: var(--accent); letter-spacing: .05em; position: relative; top: -2px;
+  }
+  h3 { font-size: 1.06rem; letter-spacing: -.01em; margin: 30px 0 4px; font-weight: 650; }
+  .prose p { margin: 12px 0; }
+  .prose ul { margin: 12px 0; padding-left: 22px; }
+  .prose li { margin: 6px 0; }
+  .prose li::marker { color: var(--accent); }
+
+  p code, li code, td code {
+    font-size: .86em;
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 1px 6px; border-radius: 5px;
+    border: 1px solid var(--accent-line);
+  }
+  /* ---- code blocks (terminal identity, dark in both themes) ---- */
+  .code {
+    background: var(--code-bg);
+    border: 1px solid #1c2330;
+    border-radius: var(--radius);
+    margin: 18px 0;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .code-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 14px;
+    background: var(--code-panel);
+    border-bottom: 1px solid #1c2330;
+  }
+  .code-bar .lamp { width: 9px; height: 9px; border-radius: 50%; background: #2b3444; }
+  .code-bar .lamp.amber { background: var(--code-amber); }
+  .code-bar .tag {
+    margin-left: auto; font-family: ui-monospace, monospace;
+    font-size: .68rem; letter-spacing: .12em; text-transform: uppercase; color: var(--code-dim);
+  }
+  pre {
+    margin: 0; padding: 16px 18px; overflow-x: auto;
+    font-size: .83rem; line-height: 1.72; color: var(--code-ink);
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    tab-size: 4;
+  }
+  pre .c { color: var(--code-dim); font-style: italic; }
+  pre .k { color: var(--code-purple); }
+  pre .s { color: var(--code-green); }
+  pre .n { color: var(--code-amber); }
+  pre .f { color: var(--code-blue); }
+  pre .p { color: #9aa4b8; }
+  pre .o { color: var(--code-amber); }
+
+  /* ---- callout ---- */
+  .callout {
+    margin: 22px 0;
+    border: 1px solid var(--accent-line);
+    background: linear-gradient(180deg, var(--accent-soft), transparent 140%);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    position: relative;
+  }
+  .callout .cap {
+    font-family: ui-monospace, monospace; font-size: .68rem; text-transform: uppercase;
+    letter-spacing: .14em; color: var(--accent); margin-bottom: 6px; font-weight: 600;
+  }
+  .callout p { margin: 6px 0; }
+  .callout.good { border-color: color-mix(in srgb, var(--good) 35%, var(--border)); background: var(--good-soft); }
+  .callout.good .cap { color: var(--good); }
+
+  /* ---- api table ---- */
+  .table-wrap { overflow-x: auto; margin: 18px 0; border: 1px solid var(--border); border-radius: var(--radius); }
+  table { border-collapse: collapse; width: 100%; font-size: .88rem; }
+  th, td { text-align: left; padding: 11px 15px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  thead th {
+    font-family: ui-monospace, monospace; font-size: .68rem; text-transform: uppercase;
+    letter-spacing: .1em; color: var(--faint); background: var(--panel-2); font-weight: 600;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--panel-2); }
+  td .sym { font-family: ui-monospace, monospace; color: var(--accent); font-size: .84rem; white-space: nowrap; }
+  td.desc { color: var(--muted); }
+
+  /* ---- how it works cards ---- */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin: 20px 0; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px 18px; box-shadow: var(--shadow);
+  }
+  .card .cap { font-family: ui-monospace, monospace; font-size: .68rem; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); margin-bottom: 8px; }
+  .card h4 { margin: 0 0 6px; font-size: .98rem; }
+  .card p { margin: 0; font-size: .88rem; color: var(--muted); }
+
+  .flow {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    font-family: ui-monospace, monospace; font-size: .8rem;
+    margin: 18px 0 6px;
+  }
+  .flow .node { padding: 7px 12px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--panel); color: var(--ink); }
+  .flow .node.hl { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent); }
+  .flow .arrow { color: var(--faint); }
+
+  footer {
+    margin-top: 60px; padding-top: 22px; border-top: 1px solid var(--border);
+    font-size: .82rem; color: var(--faint);
+  }
+  footer a { color: var(--muted); }
+
+  /* ---- responsive ---- */
+  @media (max-width: 860px) {
+    .shell { grid-template-columns: 1fr; }
+    .sidebar {
+      position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border);
+      padding: 22px 0 14px;
+    }
+    .brand-sub { margin-bottom: 14px; }
+    .toc { display: flex; flex-wrap: wrap; gap: 2px; }
+    .toc a { border-left: none; border-bottom: 2px solid transparent; padding: 5px 10px; }
+    .toc a.active { border-left: none; border-bottom-color: var(--accent-bright); }
+    .content { padding: 26px 0 90px; }
+  }
+</style>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><span>scibmad</span><span class="dot">●</span></div>
+    <div class="brand-sub">Python interface · SciBmad.jl</div>
+    <nav aria-label="Contents">
+      <ul class="toc">
+        <li><a href="#overview" class="active"><span class="num">00</span>Overview</a></li>
+        <li><a href="#install"><span class="num">01</span>Installation</a></li>
+        <li><a href="#quickstart"><span class="num">02</span>Quick start</a></li>
+        <li><a href="#deferred"><span class="num">03</span>Deferred parameters</a></li>
+        <li><a href="#naming"><span class="num">04</span>Naming elements</a></li>
+        <li><a href="#api"><span class="num">05</span>API reference</a></li>
+        <li><a href="#surface"><span class="num">06</span>Full SciBmad surface</a></li>
+        <li><a href="#architecture"><span class="num">07</span>How it works</a></li>
+        <li><a href="#upstream"><span class="num">08</span>Upstream Julia work</a></li>
+        <li><a href="#dev"><span class="num">09</span>Development</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <div class="prose">
+      <section id="overview" class="hero">
+        <div class="eyebrow">Accelerator physics · Python</div>
+        <h1>Drive <span class="mono-name">SciBmad.jl</span> from Python.</h1>
+        <p class="lede">
+          <code>scibmad</code> is a thin, ergonomic <code>juliacall</code> wrapper over the
+          SciBmad.jl simulation ecosystem &mdash; beamline construction, tracking and Twiss &mdash;
+          with the Python-specific glue that makes it feel native.
+        </p>
+        <div class="badges">
+          <span class="badge"><span class="k">import</span> <b>scibmad as sb</b></span>
+          <span class="badge">Python <b>&ge; 3.9</b></span>
+          <span class="badge">Julia <b>LTS 1.10</b></span>
+          <span class="badge">SciBmad <b>0.4</b></span>
+        </div>
+      </section>
+
+      <section id="install">
+        <h2><span class="h-num">01</span>Installation</h2>
+        <p>Install from PyPI or conda:</p>
+        <div class="code">
+          <div class="code-bar"><span class="lamp"></span><span class="lamp"></span><span class="lamp"></span><span class="tag">shell</span></div>
+<pre><span class="c"># either</span>
+pip install scibmad
+<span class="c"># or</span>
+conda install scibmad</pre>
+        </div>
+        <p>
+          The first <code>import scibmad</code> uses <code>juliapkg</code> to install the
+          <b>long-term-support (LTS) release of Julia</b> &mdash; the <code>1.10</code> series,
+          <em>not</em> the latest Julia &mdash; together with the registered <code>SciBmad.jl</code>.
+          These versions are pinned in <code>scibmad/juliapkg.json</code>, so updating the Python
+          package (<code>conda update scibmad</code>) updates the Julia side in lockstep.
+        </p>
+        <div class="callout">
+          <div class="cap">One-time cost</div>
+          <p>The first import downloads Julia and precompiles the SciBmad ecosystem. Subsequent
+          imports attach to the cached environment and start quickly.</p>
+        </div>
+      </section>
+
+      <section id="quickstart">
+        <h2><span class="h-num">02</span>Quick start</h2>
+        <p>Build a FODO cell, then compute Twiss parameters:</p>
+        <div class="code">
+          <div class="code-bar"><span class="lamp amber"></span><span class="lamp"></span><span class="lamp"></span><span class="tag">python</span></div>
+<pre><span class="k">import</span> scibmad <span class="k">as</span> sb
+
+qf <span class="o">=</span> sb.<span class="f">Quadrupole</span>(Kn1<span class="o">=</span><span class="n">0.36</span>, L<span class="o">=</span><span class="n">0.5</span>)
+qd <span class="o">=</span> sb.<span class="f">Quadrupole</span>(Kn1<span class="o">=</span><span class="o">-</span><span class="n">0.36</span>, L<span class="o">=</span><span class="n">0.5</span>)
+d  <span class="o">=</span> sb.<span class="f">Drift</span>(L<span class="o">=</span><span class="n">1.0</span>)
+
+bl <span class="o">=</span> sb.<span class="f">Beamline</span>(
+    [qf, d, qd, d],
+    species_ref<span class="o">=</span>sb.<span class="f">Species</span>(<span class="s">"electron"</span>),
+    E_ref<span class="o">=</span><span class="n">18e9</span>,
+)
+
+tw <span class="o">=</span> sb.<span class="f">twiss</span>(bl)          <span class="c"># Twiss at every element</span>
+tw <span class="o">=</span> sb.<span class="f">twiss</span>(bl, at<span class="o">=</span>[])   <span class="c"># `at` accepts a Python list</span></pre>
+        </div>
+        <p>
+          Element constructors, <code>Beamline</code>, <code>Species</code> and <code>twiss</code>
+          are forwarded to SciBmad.jl. The <code>at=</code> argument takes a plain Python list of
+          element indices, <code>LineElement</code>s and/or <code>(s0, s1)</code> ranges.
+        </p>
+      </section>
+
+      <section id="deferred">
+        <h2><span class="h-num">03</span>Deferred &amp; interdependent parameters</h2>
+        <p>
+          Deferred expressions, time-dependent parameters and batch parameters all work from
+          Python &mdash; <strong>including operator overloading</strong>.
+        </p>
+        <div class="callout good">
+          <div class="cap">The fix</div>
+          <p>Plain <code>juliacall</code> only wires Python's arithmetic operators to Julia values
+          whose type subtypes <code>Number</code>. <code>DefExpr</code>, <code>TimeDependentParam</code>
+          and <code>BatchParam</code> are not <code>Number</code> subtypes, so
+          <code>sb.DefExpr(lambda: 1) + 10</code> would fail. <code>scibmad</code>'s
+          <code>Operand</code> wrapper forwards each Python operator onto the Julia operator these
+          types define &mdash; so the arithmetic just works.</p>
+        </div>
+        <div class="code">
+          <div class="code-bar"><span class="lamp amber"></span><span class="lamp"></span><span class="lamp"></span><span class="tag">python</span></div>
+<pre>k <span class="o">=</span> sb.<span class="f">DefExpr</span>(<span class="k">lambda</span> c: c.k1)     <span class="c"># closes over a Context field</span>
+qf <span class="o">=</span> sb.<span class="f">Quadrupole</span>(Kn1<span class="o">=</span>k, L<span class="o">=</span><span class="n">0.5</span>)
+qd <span class="o">=</span> sb.<span class="f">Quadrupole</span>(Kn1<span class="o">=</span><span class="o">-</span>k, L<span class="o">=</span><span class="n">0.5</span>)  <span class="c"># unary minus works</span>
+
+sb.<span class="f">DefExpr</span>(<span class="k">lambda</span>: <span class="n">1</span>) <span class="o">+</span> <span class="n">10</span>                 <span class="c"># -> DefExpr</span>
+sb.<span class="f">DefExpr</span>(<span class="k">lambda</span>: <span class="n">1</span>) <span class="o">+</span> sb.<span class="f">DefExpr</span>(<span class="k">lambda</span>: <span class="n">2</span>)
+<span class="n">10</span> <span class="o">*</span> sb.<span class="f">DefExpr</span>(<span class="k">lambda</span>: <span class="n">2</span>)                  <span class="c"># reflected operators too</span>
+
+t <span class="o">=</span> sb.<span class="f">Time</span>()                              <span class="c"># identity time parameter</span>
+ramp <span class="o">=</span> <span class="n">1e6</span> <span class="o">*</span> sb.<span class="f">sin</span>(<span class="n">2</span> <span class="o">*</span> <span class="n">3.14159</span> <span class="o">*</span> t)       <span class="c"># arithmetic + math fns</span>
+
+b <span class="o">=</span> sb.<span class="f">BatchParam</span>([<span class="n">0.1</span>, <span class="n">0.2</span>, <span class="n">0.3</span>])         <span class="c"># per-particle values</span></pre>
+        </div>
+        <p>A deferred value is evaluated by calling it:</p>
+        <div class="code">
+          <div class="code-bar"><span class="lamp amber"></span><span class="lamp"></span><span class="lamp"></span><span class="tag">python</span></div>
+<pre>e <span class="o">=</span> sb.<span class="f">DefExpr</span>(<span class="k">lambda</span>: <span class="n">1</span>) <span class="o">+</span> <span class="n">2</span>
+e()          <span class="c"># -> 3.0</span></pre>
+        </div>
+      </section>
+
+      <section id="naming">
+        <h2><span class="h-num">04</span>Naming elements <span style="font-weight:400;color:var(--faint);font-size:.7em">(@elements equivalent)</span></h2>
+        <p>
+          Julia's <code>@elements</code> macro sets each element's <code>name</code> to its variable
+          name. The Python equivalent is <code>sb.elements(...)</code>, which names each element
+          after its key and returns a namespace:
+        </p>
+        <div class="code">
+          <div class="code-bar"><span class="lamp amber"></span><span class="lamp"></span><span class="lamp"></span><span class="tag">python</span></div>
+<pre>E <span class="o">=</span> sb.<span class="f">elements</span>(
+    qf<span class="o">=</span>sb.<span class="f">Quadrupole</span>(Kn1<span class="o">=</span><span class="n">0.36</span>, L<span class="o">=</span><span class="n">0.5</span>),
+    d<span class="o">=</span>sb.<span class="f">Drift</span>(L<span class="o">=</span><span class="n">1.0</span>),
+    qd<span class="o">=</span>sb.<span class="f">Quadrupole</span>(Kn1<span class="o">=</span><span class="o">-</span><span class="n">0.36</span>, L<span class="o">=</span><span class="n">0.5</span>),
+)
+E.qf.name            <span class="c"># -> "qf"</span>
+bl <span class="o">=</span> sb.<span class="f">Beamline</span>([E.qf, E.d, E.qd, E.d], species_ref<span class="o">=</span>sb.<span class="f">Species</span>(<span class="s">"electron"</span>),
+                 E_ref<span class="o">=</span><span class="n">18e9</span>)</pre>
+        </div>
+        <p>For a single element, <code>sb.name(ele, "qf")</code> sets and returns it.</p>
+      </section>
+
+      <section id="api">
+        <h2><span class="h-num">05</span>API reference</h2>
+        <p>The wrapped surface &mdash; the pieces that need Python-specific handling. Everything
+        else is surfaced automatically (see <a href="#surface">Full SciBmad surface</a>).</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Symbol</th><th>What it does</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><span class="sym">sb.DefExpr(f, dtype=float)</span></td><td class="desc">Lazily-evaluated deferred expression from a 0-arg callable, a <code>Context</code>-accepting callable, or a value. Supports arithmetic.</td></tr>
+              <tr><td><span class="sym">sb.TimeDependentParam(f, dtype=float)</span></td><td class="desc">Time-dependent parameter from a callable <code>f(t)</code> or a value. Supports arithmetic.</td></tr>
+              <tr><td><span class="sym">sb.Time()</span></td><td class="desc">The identity time parameter <code>t &rarr; t</code>.</td></tr>
+              <tr><td><span class="sym">sb.BatchParam(batch, dtype=float)</span></td><td class="desc">Per-particle batch parameter from a Python sequence (or scalar). Supports arithmetic.</td></tr>
+              <tr><td><span class="sym">sb.Beamline(line, **kwargs)</span></td><td class="desc">Beamline from a Python list of elements; the list is converted to a Julia vector.</td></tr>
+              <tr><td><span class="sym">sb.twiss(bl, at=None, **kwargs)</span></td><td class="desc">Twiss parameters; <code>at</code> accepts a Python list. Omit <code>at</code> for every element.</td></tr>
+              <tr><td><span class="sym">sb.elements(**kwargs)</span></td><td class="desc"><code>@elements</code> equivalent &mdash; names each element after its key, returns a namespace.</td></tr>
+              <tr><td><span class="sym">sb.name(ele, ele_name)</span></td><td class="desc">Set a single element's name and return it.</td></tr>
+              <tr><td><span class="sym">sb.sin, sb.cos, sb.sqrt, &hellip;</span></td><td class="desc">Math functions that accept both plain numbers and <code>scibmad</code> operands.</td></tr>
+              <tr><td><span class="sym">sb.Operand</span></td><td class="desc">The operator-overloading wrapper type (for <code>isinstance</code> checks).</td></tr>
+              <tr><td><span class="sym">sb.jl · sb.SciBmad</span></td><td class="desc">The raw juliacall <code>Main</code> and the <code>SciBmad</code> Julia module, for advanced use.</td></tr>
+              <tr><td><span class="sym">sb.unwrap · sb.wrap</span></td><td class="desc">Convert between operands and their underlying Julia values.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="surface">
+        <h2><span class="h-num">06</span>Full SciBmad surface</h2>
+        <p>
+          Any exported name of the <code>SciBmad</code> Julia module is available as
+          <code>scibmad.&lt;name&gt;</code> even when it is not wrapped explicitly &mdash; element
+          types (<code>Sextupole</code>, <code>SBend</code>, <code>Solenoid</code>,
+          <code>RFCavity</code>, <code>Marker</code>, <code>Multipole</code>&hellip;), functions
+          (<code>track</code>, <code>find_closed_orbit</code>, <code>dynamic_aperture</code>&hellip;)
+          and constants. Names are looked up lazily and wrapped so operands are unwrapped on the way
+          in and re-wrapped on the way out. Names that are ambiguous at the reexport level (e.g.
+          <code>Context</code>) resolve to the accelerator-facing subpackage.
+        </p>
+        <div class="code">
+          <div class="code-bar"><span class="lamp amber"></span><span class="lamp"></span><span class="lamp"></span><span class="tag">python</span></div>
+<pre>sb.<span class="f">Sextupole</span>(Kn2<span class="o">=</span><span class="n">0.1</span>, L<span class="o">=</span><span class="n">0.2</span>)     <span class="c"># not wrapped explicitly — still works</span>
+sb.<span class="f">find_closed_orbit</span>(bl)
+sb.<span class="f">Context</span>(k1<span class="o">=</span><span class="n">0.36</span>)             <span class="c"># resolved from Beamlines</span></pre>
+        </div>
+      </section>
+
+      <section id="architecture">
+        <h2><span class="h-num">07</span>How it works</h2>
+        <div class="cards">
+          <div class="card">
+            <div class="cap">Bridge</div>
+            <h4>Thin juliacall layer</h4>
+            <p>Construction, tracking and Twiss are forwarded to SciBmad.jl. Operands are unwrapped
+            going in, results re-wrapped coming out.</p>
+          </div>
+          <div class="card">
+            <div class="cap">Operators</div>
+            <h4>Operand wrapper</h4>
+            <p><code>scibmad.Operand</code> forwards Python arithmetic to the Julia operators on
+            <code>DefExpr</code> / <code>TimeDependentParam</code> / <code>BatchParam</code>.</p>
+          </div>
+          <div class="card">
+            <div class="cap">Glue</div>
+            <h4>_glue.jl</h4>
+            <p>Constructs deferred types from Python callables and converts the <code>at=</code>
+            list &mdash; loaded at import, so the package works against the <em>registered</em> Julia
+            packages today.</p>
+          </div>
+        </div>
+        <p style="margin-top:22px">The path a call takes:</p>
+        <div class="flow">
+          <span class="node">Python call</span>
+          <span class="arrow">&rarr;</span>
+          <span class="node hl">unwrap operands</span>
+          <span class="arrow">&rarr;</span>
+          <span class="node">SciBmad.jl</span>
+          <span class="arrow">&rarr;</span>
+          <span class="node hl">wrap result</span>
+          <span class="arrow">&rarr;</span>
+          <span class="node">Python value</span>
+        </div>
+      </section>
+
+      <section id="upstream">
+        <h2><span class="h-num">08</span>Recommended upstream Julia work</h2>
+        <p>
+          Per <a href="https://github.com/bmad-sim/SciBmad.jl/issues/76">SciBmad.jl#76</a>, the
+          following should eventually move into <code>PythonCall</code> package extensions in the
+          relevant SciBmad subpackages (so no package depends on <code>PythonCall</code> directly),
+          at which point the corresponding glue here can be dropped:
+        </p>
+        <ul>
+          <li>Generalize <code>twiss(&hellip;; at::Union{Colon, Vector})</code> to accept
+          <code>AbstractVector</code>, so a <code>PyArray</code>/<code>PyList</code> works without
+          conversion.</li>
+          <li>Move the <code>DefExpr</code> / <code>TimeDependentParam</code> /
+          <code>BatchParam</code> construction-from-<code>Py</code> helpers into
+          <code>BeamlinesPythonCallExt</code> and a <code>BeamTracking</code> PythonCall extension.</li>
+        </ul>
+      </section>
+
+      <section id="dev">
+        <h2><span class="h-num">09</span>Development &amp; testing</h2>
+        <div class="code">
+          <div class="code-bar"><span class="lamp"></span><span class="lamp"></span><span class="lamp"></span><span class="tag">shell</span></div>
+<pre>pip install -e <span class="s">".[test]"</span>
+pytest</pre>
+        </div>
+        <p>
+          The test suite starts a real Julia session via <code>juliacall</code> and exercises the
+          SciBmad functionality end-to-end &mdash; element construction, naming, <code>Beamline</code>,
+          <code>twiss</code> (default and <code>at=[]</code>), the operator-overloading fix, and
+          time-dependent parameter arithmetic. First run is slow (Julia precompilation).
+        </p>
+      </section>
+
+      <footer>
+        <p>
+          <code>scibmad</code> &mdash; Python interface to
+          <a href="https://github.com/bmad-sim/SciBmad.jl">SciBmad.jl</a>.
+          Distributed as <code>scibmad</code>; developed in the <code>PySciBmad</code> repository.
+        </p>
+      </footer>
+    </div>
+  </main>
+</div>
+
+<script>
+  // Scroll-spy: highlight the current section in the sidebar.
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+    var byId = {};
+    links.forEach(function (a) { byId[a.getAttribute('href').slice(1)] = a; });
+    var sections = links
+      .map(function (a) { return document.getElementById(a.getAttribute('href').slice(1)); })
+      .filter(Boolean);
+
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          links.forEach(function (l) { l.classList.remove('active'); });
+          var active = byId[e.target.id];
+          if (active) active.classList.add('active');
+        }
+      });
+    }, { rootMargin: '-10% 0px -80% 0px', threshold: 0 });
+
+    sections.forEach(function (s) { obs.observe(s); });
+  })();
+</script>
+</body>
+</html>
