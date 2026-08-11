@@ -72,6 +72,18 @@ e = sb.DefExpr(lambda: 1) + 2
 e()          # -> 3.0
 ```
 
+> **Known limitation (upstream, fix pending).** For a `DefExpr` built from a
+> *Context-accepting* lambda, the operators above do not forward an explicitly
+> supplied `Context` — `(-k)(ctx)` and `(k + 1)(ctx)` evaluate `k` against the
+> null context instead of `ctx`, so they either raise "Variable ... is not
+> defined in the local Context" or, where the name resolves via
+> `GLOBAL_CONTEXTS`, quietly return the wrong value. The same applies to a
+> `Beamline`'s stored context reaching an operator-built parameter. Zero-argument
+> `DefExpr`s (`sb.DefExpr(lambda: a)`) are unaffected, as are
+> `TimeDependentParam` and `BatchParam`. Fixed by
+> [Beamlines.jl#161](https://github.com/bmad-sim/Beamlines.jl/pull/161); this
+> note comes out once that is merged and released.
+
 ## Naming elements (`@elements` equivalent)
 
 Julia's `@elements` macro sets each element's `name` to its variable name. The
@@ -120,16 +132,31 @@ sb.unwrap, sb.wrap
 
 ### Recommended upstream (Julia) changes
 
-Per [SciBmad.jl#76](https://github.com/bmad-sim/SciBmad.jl/issues/76), the
-following should eventually move into `PythonCall` package extensions in the
-relevant SciBmad subpackages (so no package depends on `PythonCall` directly),
-at which point the corresponding glue here can be dropped:
+Per [SciBmad.jl#76](https://github.com/bmad-sim/SciBmad.jl/issues/76), the glue
+should eventually move into `PythonCall` package extensions in the relevant
+SciBmad subpackages (so no package depends on `PythonCall` directly), at which
+point the corresponding glue here can be dropped. Each piece is up as a **draft
+PR**; none is merged or released yet, so all of the glue is still required:
 
-* Generalize `twiss(...; at::Union{Colon, Vector})` to accept `AbstractVector`
-  (so a `PyArray`/`PyList` works without conversion).
-* Move the `DefExpr` / `TimeDependentParam` / `BatchParam` construction-from-
-  `Py` helpers into `BeamlinesPythonCallExt` / a `BeamTracking` PythonCall
-  extension.
+| Upstream change | PR | Glue it would retire |
+| --- | --- | --- |
+| Generalize `twiss(...; at::Union{Colon, Vector})` to `AbstractVector`, so a `PyArray`/`PyList` works without conversion | [SciBmad.jl#81](https://github.com/bmad-sim/SciBmad.jl/pull/81) | `to_any_vector` in the `at=` path of `twiss` |
+| `DefExpr(::Py)` construction from Python callables, in `BeamlinesPythonCallExt` | [Beamlines.jl#158](https://github.com/bmad-sim/Beamlines.jl/pull/158) | `defexpr_from_py0` / `defexpr_from_py1` |
+| New `BeamTrackingPythonCallExt` for `TimeDependentParam(::Py)` / `BatchParam(::Py)` | [BeamTracking.jl#315](https://github.com/bmad-sim/BeamTracking.jl/pull/315) | `tdparam_from_py`, `batchparam_from_py`, `batchparam_scalar` |
+
+`Beamline`'s own list handling already landed upstream — as of Beamlines 0.9.4
+its constructor does `convert(Vector{LineElement}, vec(line))`, so the
+`to_any_vector` call in `sb.Beamline` is belt-and-braces rather than required.
+
+The operator-overloading wrappers in `_wrappers.py` are *not* on this list: they
+compensate for a `juliacall` limitation (arithmetic dunders are only wired up for
+`Number` subtypes), not for anything missing in SciBmad, so they stay regardless.
+
+### Verified against
+
+The suite passes end-to-end against the current registered stack: Julia 1.10.11
+(LTS), SciBmad 0.4.2, Beamlines 0.9.4, BeamTracking 0.7.1,
+AtomicAndPhysicalConstants 0.10.0, PythonCall 0.9.35.
 
 ## Development / testing
 

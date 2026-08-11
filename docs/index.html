@@ -430,6 +430,21 @@ b <span class="o">=</span> sb.<span class="f">BatchParam</span>([<span class="n"
 <pre>e <span class="o">=</span> sb.<span class="f">DefExpr</span>(<span class="k">lambda</span>: <span class="n">1</span>) <span class="o">+</span> <span class="n">2</span>
 e()          <span class="c"># -> 3.0</span></pre>
         </div>
+        <div class="callout">
+          <div class="cap">Known limitation &mdash; upstream, fix pending</div>
+          <p>For a <code>DefExpr</code> built from a <em>Context-accepting</em> lambda, the
+          operators above do not forward an explicitly supplied <code>Context</code>:
+          <code>(-k)(ctx)</code> and <code>(k + 1)(ctx)</code> evaluate <code>k</code> against the
+          null context rather than <code>ctx</code>, so they either raise
+          &ldquo;Variable &hellip; is not defined in the local Context&rdquo; or, where the name
+          resolves via <code>GLOBAL_CONTEXTS</code>, quietly return the wrong value. The same
+          applies to a <code>Beamline</code>'s stored context reaching an operator-built
+          parameter. Zero-argument <code>DefExpr</code>s
+          (<code>sb.DefExpr(lambda: a)</code>) are unaffected, as are
+          <code>TimeDependentParam</code> and <code>BatchParam</code>. Fixed by
+          <a href="https://github.com/bmad-sim/Beamlines.jl/pull/161">Beamlines.jl#161</a>;
+          this note comes out once that is merged and released.</p>
+        </div>
       </section>
 
       <section id="naming">
@@ -540,19 +555,46 @@ sb.<span class="f">Context</span>(k1<span class="o">=</span><span class="n">0.36
       <section id="upstream">
         <h2><span class="h-num">08</span>Recommended upstream Julia work</h2>
         <p>
-          Per <a href="https://github.com/bmad-sim/SciBmad.jl/issues/76">SciBmad.jl#76</a>, the
-          following should eventually move into <code>PythonCall</code> package extensions in the
-          relevant SciBmad subpackages (so no package depends on <code>PythonCall</code> directly),
-          at which point the corresponding glue here can be dropped:
+          Per <a href="https://github.com/bmad-sim/SciBmad.jl/issues/76">SciBmad.jl#76</a>, the glue
+          should eventually move into <code>PythonCall</code> package extensions in the relevant
+          SciBmad subpackages (so no package depends on <code>PythonCall</code> directly), at which
+          point the corresponding glue here can be dropped. Each piece is up as a
+          <b>draft PR</b>; none is merged or released yet, so all of the glue is still required.
         </p>
         <ul>
           <li>Generalize <code>twiss(&hellip;; at::Union{Colon, Vector})</code> to accept
           <code>AbstractVector</code>, so a <code>PyArray</code>/<code>PyList</code> works without
-          conversion.</li>
-          <li>Move the <code>DefExpr</code> / <code>TimeDependentParam</code> /
-          <code>BatchParam</code> construction-from-<code>Py</code> helpers into
-          <code>BeamlinesPythonCallExt</code> and a <code>BeamTracking</code> PythonCall extension.</li>
+          conversion &mdash;
+          <a href="https://github.com/bmad-sim/SciBmad.jl/pull/81">SciBmad.jl#81</a>.
+          Retires <code>to_any_vector</code> in the <code>at=</code> path.</li>
+          <li><code>DefExpr(::Py)</code> construction from Python callables in
+          <code>BeamlinesPythonCallExt</code> &mdash;
+          <a href="https://github.com/bmad-sim/Beamlines.jl/pull/158">Beamlines.jl#158</a>.
+          Retires <code>defexpr_from_py0</code> / <code>defexpr_from_py1</code>.</li>
+          <li>A new <code>BeamTrackingPythonCallExt</code> for <code>TimeDependentParam(::Py)</code>
+          and <code>BatchParam(::Py)</code> &mdash;
+          <a href="https://github.com/bmad-sim/BeamTracking.jl/pull/315">BeamTracking.jl#315</a>.
+          Retires <code>tdparam_from_py</code>, <code>batchparam_from_py</code>,
+          <code>batchparam_scalar</code>.</li>
         </ul>
+        <p>
+          <code>Beamline</code>'s own list handling already landed upstream &mdash; as of
+          Beamlines 0.9.4 its constructor does
+          <code>convert(Vector{LineElement}, vec(line))</code>, so the <code>to_any_vector</code>
+          call in <code>sb.Beamline</code> is belt-and-braces rather than required.
+        </p>
+        <div class="callout">
+          <div class="cap">Not upstream work</div>
+          <p>The operator-overloading wrappers in <code>_wrappers.py</code> compensate for a
+          <code>juliacall</code> limitation &mdash; arithmetic dunders are only wired up for
+          <code>Number</code> subtypes &mdash; not for anything missing in SciBmad, so they stay
+          regardless.</p>
+        </div>
+        <p style="margin-top:22px">
+          <b>Verified against:</b> Julia 1.10.11 (LTS), SciBmad 0.4.2, Beamlines 0.9.4,
+          BeamTracking 0.7.1, AtomicAndPhysicalConstants 0.10.0, PythonCall 0.9.35 &mdash;
+          full suite passing.
+        </p>
       </section>
 
       <section id="dev">
