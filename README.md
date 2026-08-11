@@ -10,20 +10,23 @@ Python-specific ergonomics needed to make it feel native.
 > repository is `PySciBmad`.
 
 📄 **Browsable docs:** a self-contained HTML version of this documentation lives at
-[`docs/index.html`](docs/index.html) — open it directly in a browser.
+[`docs/index.html`](https://github.com/bmad-sim/PySciBmad/blob/main/docs/index.html)
+— open it directly in a browser.
 
 ## Installation
 
 ```bash
-pip install scibmad          # or: conda install scibmad
+pip install scibmad
 ```
+
+A conda-forge package is planned but not yet available.
 
 The first import installs, via `juliapkg`, the **long-term-support (LTS)** release
 of Julia (the `1.10` series — *not* the latest Julia) together with the
 registered `SciBmad.jl`. This is pinned in
-[`src/scibmad/juliapkg.json`](src/scibmad/juliapkg.json). Updating the Python
-package (e.g. `conda update scibmad`) updates the pinned Julia/SciBmad versions
-along with it.
+[`src/scibmad/juliapkg.json`](https://github.com/bmad-sim/PySciBmad/blob/main/src/scibmad/juliapkg.json).
+Updating the Python package (e.g. `pip install -U scibmad`) updates the pinned
+Julia/SciBmad versions along with it.
 
 ## Quick start
 
@@ -133,7 +136,8 @@ sb.unwrap, sb.wrap
 * **Operator overloading fix.** `scibmad.Operand` forwards Python arithmetic to
   the Julia operators defined on `DefExpr` / `TimeDependentParam` / `BatchParam`.
 * **Deferred-type construction from Python callables** and the `at=`
-  Python-list handling live in [`src/scibmad/_glue.jl`](src/scibmad/_glue.jl),
+  Python-list handling live in
+  [`src/scibmad/_glue.jl`](https://github.com/bmad-sim/PySciBmad/blob/main/src/scibmad/_glue.jl),
   loaded at import time. This keeps the Python package working against the
   *registered* Julia packages today.
 

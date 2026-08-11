@@ -13,6 +13,19 @@ authors = [
     { name = "The SciBmad developers" },
 ]
 keywords = ["accelerator", "physics", "simulation", "beam", "twiss", "bmad"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Physics",
+]
 dependencies = [
     # juliacall provides the Julia runtime bridge and pulls in juliapkg,
     # which reads scibmad/juliapkg.json to install the LTS Julia + SciBmad.jl.
@@ -23,8 +36,14 @@ dependencies = [
 test = ["pytest >=7"]
 
 [project.urls]
-Homepage = "https://github.com/bmad-sim/SciBmad.jl"
-Issues = "https://github.com/bmad-sim/SciBmad.jl/issues"
+# These must point at the Python package's own repo: PyPI renders them in the
+# sidebar, and bug reports about `scibmad` belong on PySciBmad's tracker, not
+# SciBmad.jl's.
+Homepage = "https://github.com/bmad-sim/PySciBmad"
+Documentation = "https://github.com/bmad-sim/PySciBmad/blob/main/docs/index.html"
+Repository = "https://github.com/bmad-sim/PySciBmad"
+Issues = "https://github.com/bmad-sim/PySciBmad/issues"
+"SciBmad.jl (Julia)" = "https://github.com/bmad-sim/SciBmad.jl"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/scibmad"]
