@@ -1,11 +1,18 @@
 """Python operator-overloading wrappers for SciBmad's deferred-parameter types.
 
-``juliacall`` only wires Python's arithmetic dunder methods to Julia values whose
-type is a subtype of ``Number``. SciBmad's ``DefExpr``, ``TimeDependentParam`` and
-``BatchParam`` define ``+ - * / ^`` (and unary math) in Julia but are *not*
-``Number`` subtypes, so straight from ``juliacall`` this fails::
+``juliacall`` defines the arithmetic dunder methods on ``AnyValue``, the wrapper
+for every Julia value, so operations between two Julia values already work. But
+the underlying ``pyjlany_op`` returns ``NotImplemented`` unless the *other*
+operand is also a Julia value; only ``Number`` subtypes get ``pyjlnumber_op``,
+which additionally ``pyconvert``s a Python number. SciBmad's ``DefExpr``,
+``TimeDependentParam`` and ``BatchParam`` define ``+ - * / ^`` (and unary math)
+in Julia but are *not* ``Number`` subtypes, so mixing them with a Python scalar
+fails straight from ``juliacall``::
 
-    sb.DefExpr(lambda: 1) + 10          # TypeError without this wrapper
+    sb.DefExpr(lambda: 1) + sb.DefExpr(lambda: 2)   # works without this wrapper
+    -sb.DefExpr(lambda: 1)                          # works without this wrapper
+    sb.DefExpr(lambda: 1) + 10                      # TypeError without it
+    10 * sb.DefExpr(lambda: 2)                      # TypeError without it
 
 :class:`Operand` fixes that by holding the underlying Julia value and forwarding
 each Python operator to the corresponding Julia operator. Results that are still

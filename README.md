@@ -47,8 +47,8 @@ tw = sb.twiss(bl, at=[])   # `at` accepts a Python list
 ## Deferred / interdependent parameters
 
 Deferred expressions, time-dependent parameters and batch parameters all work
-from Python, **including operator overloading** — which plain `juliacall` cannot
-provide because these Julia types are not `Number` subtypes:
+from Python, **including mixed arithmetic with Python numbers** — which plain
+`juliacall` cannot provide for these types (see *How it works* below for why):
 
 ```python
 k = sb.DefExpr(lambda c: c.k1)     # closes over a Context field
@@ -72,17 +72,24 @@ e = sb.DefExpr(lambda: 1) + 2
 e()          # -> 3.0
 ```
 
-> **Known limitation (upstream, fix pending).** For a `DefExpr` built from a
-> *Context-accepting* lambda, the operators above do not forward an explicitly
-> supplied `Context` — `(-k)(ctx)` and `(k + 1)(ctx)` evaluate `k` against the
-> null context instead of `ctx`, so they either raise "Variable ... is not
-> defined in the local Context" or, where the name resolves via
-> `GLOBAL_CONTEXTS`, quietly return the wrong value. The same applies to a
-> `Beamline`'s stored context reaching an operator-built parameter. Zero-argument
-> `DefExpr`s (`sb.DefExpr(lambda: a)`) are unaffected, as are
-> `TimeDependentParam` and `BatchParam`. Fixed by
-> [Beamlines.jl#161](https://github.com/bmad-sim/Beamlines.jl/pull/161); this
+> **Known limitations (upstream, fix pending).** Two `DefExpr` bugs in Beamlines
+> 0.9.4, both fixed by
+> [Beamlines.jl#161](https://github.com/bmad-sim/Beamlines.jl/pull/161). This
 > note comes out once that is merged and released.
+>
+> 1. **`abs` is missing on `DefExpr`.** `abs(sb.DefExpr(lambda: -1.0))` and
+>    `sb.abs(k)` raise a `MethodError` — `Base.abs` is simply not defined for
+>    `DefExpr`, unlike every other single-argument math function. This affects
+>    *all* `DefExpr`s, including zero-argument ones. `TimeDependentParam` and
+>    `BatchParam` are unaffected; they do define it.
+> 2. **Operators drop an explicitly supplied `Context`.** For a `DefExpr` built
+>    from a *Context-accepting* lambda, `(-k)(ctx)` and `(k + 1)(ctx)` evaluate
+>    `k` against the null context instead of `ctx`, so they either raise
+>    "Variable ... is not defined in the local Context" or, where the name
+>    resolves via `GLOBAL_CONTEXTS`, quietly return the wrong value. The same
+>    applies to a `Beamline`'s stored context reaching an operator-built
+>    parameter. Zero-argument `DefExpr`s, `TimeDependentParam` and `BatchParam`
+>    are unaffected.
 
 ## Naming elements (`@elements` equivalent)
 
@@ -136,7 +143,8 @@ Per [SciBmad.jl#76](https://github.com/bmad-sim/SciBmad.jl/issues/76), the glue
 should eventually move into `PythonCall` package extensions in the relevant
 SciBmad subpackages (so no package depends on `PythonCall` directly), at which
 point the corresponding glue here can be dropped. Each piece is up as a **draft
-PR**; none is merged or released yet, so all of the glue is still required:
+PR**; none is merged or released yet, so every glue function below is still
+required:
 
 | Upstream change | PR | Glue it would retire |
 | --- | --- | --- |
@@ -149,8 +157,17 @@ its constructor does `convert(Vector{LineElement}, vec(line))`, so the
 `to_any_vector` call in `sb.Beamline` is belt-and-braces rather than required.
 
 The operator-overloading wrappers in `_wrappers.py` are *not* on this list: they
-compensate for a `juliacall` limitation (arithmetic dunders are only wired up for
-`Number` subtypes), not for anything missing in SciBmad, so they stay regardless.
+compensate for a `juliacall` limitation, not for anything missing in SciBmad.
+
+The limitation is narrower than "no operators". `juliacall` defines the
+arithmetic dunders on `AnyValue`, the wrapper for *every* Julia value, so
+`DefExpr + DefExpr` and `-DefExpr` already work without help. But the underlying
+`pyjlany_op` returns `NotImplemented` unless the *other* operand is also a Julia
+value; only `Number` subtypes get `pyjlnumber_op`, which additionally
+`pyconvert`s a Python number. So it is specifically **mixed arithmetic with a
+Python scalar** — `DefExpr(...) + 10`, `10 * DefExpr(...)` — that raises
+`TypeError` without `Operand`. The clean upstream fix would be in PythonCall
+(give `pyjlany_op` the same convert fallback), not in SciBmad.
 
 ### Verified against
 

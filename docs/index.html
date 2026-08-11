@@ -398,16 +398,20 @@ tw <span class="o">=</span> sb.<span class="f">twiss</span>(bl, at<span class="o
         <h2><span class="h-num">03</span>Deferred &amp; interdependent parameters</h2>
         <p>
           Deferred expressions, time-dependent parameters and batch parameters all work from
-          Python &mdash; <strong>including operator overloading</strong>.
+          Python &mdash; <strong>including mixed arithmetic with Python numbers</strong>.
         </p>
         <div class="callout good">
           <div class="cap">The fix</div>
-          <p>Plain <code>juliacall</code> only wires Python's arithmetic operators to Julia values
-          whose type subtypes <code>Number</code>. <code>DefExpr</code>, <code>TimeDependentParam</code>
-          and <code>BatchParam</code> are not <code>Number</code> subtypes, so
-          <code>sb.DefExpr(lambda: 1) + 10</code> would fail. <code>scibmad</code>'s
-          <code>Operand</code> wrapper forwards each Python operator onto the Julia operator these
-          types define &mdash; so the arithmetic just works.</p>
+          <p><code>juliacall</code> defines the arithmetic dunders on <code>AnyValue</code>, the
+          wrapper for <em>every</em> Julia value, so <code>DefExpr + DefExpr</code> and
+          <code>-DefExpr</code> already work. But the underlying <code>pyjlany_op</code> returns
+          <code>NotImplemented</code> unless the <em>other</em> operand is also a Julia value; only
+          <code>Number</code> subtypes get <code>pyjlnumber_op</code>, which additionally
+          <code>pyconvert</code>s a Python number. <code>DefExpr</code>,
+          <code>TimeDependentParam</code> and <code>BatchParam</code> are not <code>Number</code>
+          subtypes, so <code>sb.DefExpr(lambda: 1) + 10</code> would fail.
+          <code>scibmad</code>'s <code>Operand</code> wrapper forwards each Python operator onto the
+          Julia operator these types define &mdash; so the mixed arithmetic just works too.</p>
         </div>
         <div class="code">
           <div class="code-bar"><span class="lamp amber"></span><span class="lamp"></span><span class="lamp"></span><span class="tag">python</span></div>
@@ -431,19 +435,28 @@ b <span class="o">=</span> sb.<span class="f">BatchParam</span>([<span class="n"
 e()          <span class="c"># -> 3.0</span></pre>
         </div>
         <div class="callout">
-          <div class="cap">Known limitation &mdash; upstream, fix pending</div>
-          <p>For a <code>DefExpr</code> built from a <em>Context-accepting</em> lambda, the
-          operators above do not forward an explicitly supplied <code>Context</code>:
-          <code>(-k)(ctx)</code> and <code>(k + 1)(ctx)</code> evaluate <code>k</code> against the
-          null context rather than <code>ctx</code>, so they either raise
-          &ldquo;Variable &hellip; is not defined in the local Context&rdquo; or, where the name
-          resolves via <code>GLOBAL_CONTEXTS</code>, quietly return the wrong value. The same
-          applies to a <code>Beamline</code>'s stored context reaching an operator-built
-          parameter. Zero-argument <code>DefExpr</code>s
-          (<code>sb.DefExpr(lambda: a)</code>) are unaffected, as are
-          <code>TimeDependentParam</code> and <code>BatchParam</code>. Fixed by
-          <a href="https://github.com/bmad-sim/Beamlines.jl/pull/161">Beamlines.jl#161</a>;
-          this note comes out once that is merged and released.</p>
+          <div class="cap">Known limitations &mdash; upstream, fix pending</div>
+          <p>Two <code>DefExpr</code> bugs in Beamlines 0.9.4, both fixed by
+          <a href="https://github.com/bmad-sim/Beamlines.jl/pull/161">Beamlines.jl#161</a>. This
+          note comes out once that is merged and released.</p>
+          <ol>
+            <li><b><code>abs</code> is missing on <code>DefExpr</code>.</b>
+            <code>abs(sb.DefExpr(lambda: -1.0))</code> and <code>sb.abs(k)</code> raise a
+            <code>MethodError</code> &mdash; <code>Base.abs</code> is simply not defined for
+            <code>DefExpr</code>, unlike every other single-argument math function. This affects
+            <em>all</em> <code>DefExpr</code>s, including zero-argument ones.
+            <code>TimeDependentParam</code> and <code>BatchParam</code> are unaffected; they do
+            define it.</li>
+            <li><b>Operators drop an explicitly supplied <code>Context</code>.</b> For a
+            <code>DefExpr</code> built from a <em>Context-accepting</em> lambda,
+            <code>(-k)(ctx)</code> and <code>(k + 1)(ctx)</code> evaluate <code>k</code> against the
+            null context rather than <code>ctx</code>, so they either raise
+            &ldquo;Variable &hellip; is not defined in the local Context&rdquo; or, where the name
+            resolves via <code>GLOBAL_CONTEXTS</code>, quietly return the wrong value. The same
+            applies to a <code>Beamline</code>'s stored context reaching an operator-built
+            parameter. Zero-argument <code>DefExpr</code>s, <code>TimeDependentParam</code> and
+            <code>BatchParam</code> are unaffected.</li>
+          </ol>
         </div>
       </section>
 
@@ -559,7 +572,8 @@ sb.<span class="f">Context</span>(k1<span class="o">=</span><span class="n">0.36
           should eventually move into <code>PythonCall</code> package extensions in the relevant
           SciBmad subpackages (so no package depends on <code>PythonCall</code> directly), at which
           point the corresponding glue here can be dropped. Each piece is up as a
-          <b>draft PR</b>; none is merged or released yet, so all of the glue is still required.
+          <b>draft PR</b>; none is merged or released yet, so every glue function below is still
+          required.
         </p>
         <ul>
           <li>Generalize <code>twiss(&hellip;; at::Union{Colon, Vector})</code> to accept
@@ -584,11 +598,19 @@ sb.<span class="f">Context</span>(k1<span class="o">=</span><span class="n">0.36
           call in <code>sb.Beamline</code> is belt-and-braces rather than required.
         </p>
         <div class="callout">
-          <div class="cap">Not upstream work</div>
+          <div class="cap">Not upstream work &mdash; at least, not SciBmad's</div>
           <p>The operator-overloading wrappers in <code>_wrappers.py</code> compensate for a
-          <code>juliacall</code> limitation &mdash; arithmetic dunders are only wired up for
-          <code>Number</code> subtypes &mdash; not for anything missing in SciBmad, so they stay
-          regardless.</p>
+          <code>juliacall</code> limitation, not for anything missing in SciBmad. The limitation is
+          narrower than &ldquo;no operators&rdquo;: <code>juliacall</code> defines the arithmetic
+          dunders on <code>AnyValue</code>, the wrapper for <em>every</em> Julia value, so
+          <code>DefExpr + DefExpr</code> and <code>-DefExpr</code> already work unaided. But
+          <code>pyjlany_op</code> returns <code>NotImplemented</code> unless the <em>other</em>
+          operand is also a Julia value; only <code>Number</code> subtypes get
+          <code>pyjlnumber_op</code>, which additionally <code>pyconvert</code>s a Python number. So
+          it is specifically <b>mixed arithmetic with a Python scalar</b> &mdash;
+          <code>DefExpr(&hellip;) + 10</code>, <code>10 * DefExpr(&hellip;)</code> &mdash; that needs
+          <code>Operand</code>. The clean upstream fix would be in PythonCall itself (give
+          <code>pyjlany_op</code> the same convert fallback), not in SciBmad.</p>
         </div>
         <p style="margin-top:22px">
           <b>Verified against:</b> Julia 1.10.11 (LTS), SciBmad 0.4.2, Beamlines 0.9.4,
