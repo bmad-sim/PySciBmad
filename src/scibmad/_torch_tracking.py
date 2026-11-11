@@ -9,7 +9,9 @@ from ._runtime import glue, jl
 from ._wrappers import unwrap
 from ._torch_bridge import _JuliaTorchCallable
 
-# Load the tracking helper into PySciBmad's glue module.
+import torch
+
+
 _tracking_path = os.path.join(
     os.path.dirname(__file__),
     "_torch_tracking.jl",
@@ -23,49 +25,118 @@ def torch_track(
     *,
     elements,
     v0,
-    quadrupole_index,
-    kn1,
+    parameters=None,
+    quadrupole_index=None,
+    kn1=None,
 ):
-    """Track a particle with a differentiable quadrupole strength.
+    """Differentiable tracking through a SciBmad beamline.
 
-    Args:
-        bl: Existing PySciBmad beamline.
-        elements: Original elements in beamline order.
-        v0: Initial six-dimensional particle coordinates.
-        quadrupole_index: Zero-based index of the quadrupole.
-        kn1: Differentiable quadrupole strength.
+    parameters:
+        Sequence of (element, "Kn1", tensor) tuples.
 
-    Returns:
-        A PyTorch tensor of final particle coordinates.
+    Legacy interface:
+        quadrupole_index and kn1 are also supported.
     """
-    import torch
 
     if not isinstance(v0, torch.Tensor):
         raise TypeError("v0 must be a torch.Tensor")
 
-    if v0.ndim != 1 or v0.numel() != 6:
+    if v0.shape != (6,):
         raise ValueError("v0 must have shape (6,)")
 
-    if not isinstance(kn1, torch.Tensor) or kn1.numel() != 1:
-        raise TypeError("kn1 must be a scalar torch.Tensor")
+    if not v0.is_floating_point():
+        raise TypeError("v0 must have a floating-point dtype")
 
-    if not 0 <= quadrupole_index < len(elements):
-        raise IndexError("quadrupole_index is out of range")
+    elements = list(elements)
 
-    # Convert the element sequence into a Julia vector.
+    # Preserve the previous single-quadrupole API.
+    if parameters is None:
+        if quadrupole_index is None or kn1 is None:
+            raise ValueError(
+                "Provide parameters or quadrupole_index and kn1"
+            )
+
+        if not 0 <= quadrupole_index < len(elements):
+            raise IndexError("quadrupole_index is out of range")
+
+        parameters = [
+            (elements[quadrupole_index], "Kn1", kn1)
+        ]
+    elif quadrupole_index is not None or kn1 is not None:
+        raise ValueError(
+            "Do not combine parameters with legacy arguments"
+        )
+
+    if not parameters:
+        raise ValueError("parameters must not be empty")
+
+    indices = []
+    values = []
+
+    for element, attribute, value in parameters:
+        if attribute != "Kn1":
+            raise NotImplementedError(
+                "Currently only Kn1 is supported"
+            )
+
+        if not isinstance(value, torch.Tensor):
+            raise TypeError(
+                "Parameter values must be torch.Tensor objects"
+            )
+
+        if value.numel() != 1:
+            raise ValueError(
+                "Each parameter must be a scalar tensor"
+            )
+
+        if value.dtype != v0.dtype or value.device != v0.device:
+            raise ValueError(
+                "Parameter dtype and device must match v0"
+            )
+
+        # Identify the element by Python object identity.
+        matches = [
+            i for i, candidate in enumerate(elements)
+            if candidate is element
+        ]
+
+        if len(matches) != 1:
+            raise ValueError(
+                "Each parameter must identify exactly one "
+                "element in the supplied elements list"
+            )
+
+        index = matches[0]
+
+        if index in indices:
+            raise ValueError(
+                "The same element was specified more than once"
+            )
+
+        indices.append(index)
+        values.append(value.reshape(()))
+
+    # Stack scalar tensors into one differentiable vector.
+    strengths = torch.stack(values)
+
+    # Convert Python elements and indices to Julia arrays.
     jl_elements = glue.to_any_vector(
         [unwrap(ele) for ele in elements]
     )
 
+    jl_indices = glue.to_any_vector(
+        [i + 1 for i in indices]
+    )
+
     track_fn = _JuliaTorchCallable(
-        glue.torch_track_quadrupole
+        glue.torch_track_parameters
     )
 
     return track_fn(
         jl_elements,
-        quadrupole_index + 1,
+        jl_indices,
         v0,
-        kn1,
+        strengths,
         bl.species_ref,
         bl.p_over_q_ref,
     )
