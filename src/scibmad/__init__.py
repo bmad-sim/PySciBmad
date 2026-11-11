@@ -4,6 +4,8 @@ import torch
 from ._torch_bridge import _JuliaTorchCallable
 from ._wrappers import Operand, unwrap, wrap
 
+from ._torch_tracking import torch_track
+
 """Python interface to the SciBmad.jl accelerator physics ecosystem.
 
 Basic usage::
