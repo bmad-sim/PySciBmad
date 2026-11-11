@@ -27,12 +27,30 @@ function torch_track_quadrupole(
         p_over_q_ref=p_over_q_ref,
     )
 
+   
+    # Determine the number of particles.
+    length(coords) % 6 == 0 ||
+        throw(ArgumentError(
+            "Particle coordinate count must be divisible by 6"
+        ))
+
+    n_particles = length(coords) ÷ 6
+
+    n_particles > 0 ||
+        throw(ArgumentError(
+            "At least one particle is required"
+        ))
+
     # Preserve the ForwardDiff dual-number type.
-    T = promote_type(eltype(coords), typeof(kn1))
+    T = promote_type(eltype(coords), eltype(strengths))
 
-    v = Matrix{T}(undef, 1, 6)
-    v[1, :] .= coords
+    # Convert the flattened coordinates into
+    # an N x 6 Julia matrix.
+    v = permutedims(
+        reshape(T.(coords), 6, n_particles)
+    )
 
+    # Track all particles as one native SciBmad Bunch.
     bunch = SciBmad.Bunch(
         v;
         species=bl.species_ref,
@@ -42,8 +60,10 @@ function torch_track_quadrupole(
 
     SciBmad.track!(bunch, bl)
 
-    return vec(bunch.coords.v[1, :])
+    # Flatten in particle-major order for Python.
+    return vec(permutedims(bunch.coords.v))
 end
+
 
 
 # Track through a beamline with multiple differentiable
@@ -135,8 +155,16 @@ function torch_track_parameters(
 
     T = promote_type(eltype(coords), eltype(strengths))
 
-    v = Matrix{T}(undef, 1, 6)
-    v[1, :] .= coords
+    length(coords) % 6 == 0 ||
+        throw(ArgumentError("Coordinate count must be divisible by 6"))
+
+    n_particles = length(coords) ÷ 6
+
+    n_particles > 0 ||
+        throw(ArgumentError("At least one particle is required"))
+
+    # Convert flattened coordinates into an N x 6 matrix.
+    v = permutedims(reshape(T.(coords), 6, n_particles))
 
     bunch = SciBmad.Bunch(
         v;
@@ -147,7 +175,7 @@ function torch_track_parameters(
 
     SciBmad.track!(bunch, bl)
 
-    return vec(bunch.coords.v[1, :])
+    return vec(permutedims(bunch.coords.v))
 end
 
 

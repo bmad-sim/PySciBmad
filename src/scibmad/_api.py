@@ -14,6 +14,8 @@ import types
 from ._runtime import SciBmad, UNARY_OP, glue, jl
 from ._wrappers import Operand, unwrap, wrap
 
+import sys
+
 __all__ = [
     "DefExpr",
     "TimeDependentParam",
@@ -222,10 +224,10 @@ def _make_unary(jl_fn):
 
 def _make_unary(jl_fn):
     def _fn(x):
-        from ._torch_bridge import _JuliaTorchCallable
-        import torch
+        torch = sys.modules.get("torch")
 
-        if isinstance(x, torch.Tensor):
+        if torch is not None and isinstance(x, torch.Tensor):
+            from ._torch_bridge import _JuliaTorchCallable
             return _JuliaTorchCallable(jl_fn)(x)
 
         return wrap(jl_fn(unwrap(x)))

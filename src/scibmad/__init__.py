@@ -1,10 +1,8 @@
 from __future__ import annotations
 from ._runtime import LOOKUP_MODULES, SciBmad, jl
-import torch
-from ._torch_bridge import _JuliaTorchCallable
 from ._wrappers import Operand, unwrap, wrap
 
-from ._torch_tracking import torch_track
+import sys
 
 """Python interface to the SciBmad.jl accelerator physics ecosystem.
 
@@ -87,7 +85,13 @@ def _make_passthrough(jl_callable):
         a = [unwrap(x) for x in args]
         k = {key: unwrap(v) for key, v in kwargs.items()}
 
-        if any(isinstance(x, torch.Tensor) for x in a):
+        # Do not import torch unless it is already loaded.
+        torch = sys.modules.get("torch")
+
+        if torch is not None and any(
+            isinstance(x, torch.Tensor) for x in a
+        ):
+            from ._torch_bridge import _JuliaTorchCallable
             return _JuliaTorchCallable(jl_callable)(*a, **k)
 
         return wrap(jl_callable(*a, **k))
@@ -125,3 +129,19 @@ def __getattr__(attr):
 def __dir__():
     extra = [str(n) for n in jl.names(SciBmad)]
     return sorted(_EXPLICIT.union(extra))
+
+
+def torch_track(*args, **kwargs):
+    """Differentiable tracking using optional PyTorch support."""
+    try:
+        from ._torch_tracking import torch_track as _track
+    except ModuleNotFoundError as exc:
+        if exc.name == "torch":
+            raise ImportError(
+                "PyTorch support requires installing "
+                "scibmad[torch]"
+            ) from exc
+        raise
+
+    return _track(*args, **kwargs)
+

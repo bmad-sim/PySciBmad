@@ -50,11 +50,6 @@ jl.seval("module _PySciBmadGlue end")
 glue = jl._PySciBmadGlue
 jl.Base.include(glue, _glue_path)
 
-# Load Julia AD helpters for PyTorch autograd
-from ._torch_autodiff import AUTODIFF_JULIA_CODE 
-
-jl.seval(AUTODIFF_JULIA_CODE)
-
 # Julia operator functions, fetched once, used by the Python operand wrappers to
 # dispatch arithmetic onto the underlying Julia values.
 OP = {

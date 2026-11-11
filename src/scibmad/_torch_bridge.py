@@ -2,6 +2,12 @@ import numpy as np
 import torch
 from ._runtime import jl 
 
+from ._torch_autodiff import AUTODIFF_JULIA_CODE
+
+# Initialize Julia differentiation helpers only
+# when the PyTorch bridge is imported.
+jl.seval(AUTODIFF_JULIA_CODE)
+
 def _to_julia_input(x):
     """
     Converts a torch tensor into a plain value that Julia/juliacall can consume, for use as an argument to a Julia function call
@@ -14,9 +20,13 @@ def _to_julia_input(x):
     - is_scalar_input: True if x had a single element, False otherwise
     """
     x_np = x.detach().cpu().numpy()
-    if x_np.size == 1:
+
+    # Only genuine 0-dimensional tensors become scalars.
+    if x_np.ndim == 0:
         return float(x_np.item()), True
-    return x_np, False # removed .flatten, support multi particle tracking
+
+    # Preserve vector semantics, including shape (1,).
+    return x_np.reshape(-1), False
 
 
 def _to_numpy_output(result):

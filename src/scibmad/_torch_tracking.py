@@ -40,8 +40,24 @@ def torch_track(
     if not isinstance(v0, torch.Tensor):
         raise TypeError("v0 must be a torch.Tensor")
 
-    if v0.shape != (6,):
-        raise ValueError("v0 must have shape (6,)")
+    # Accept a single particle (6,) or multiple particles (N, 6)
+    if v0.ndim == 1:
+        if v0.shape != (6,):
+            raise ValueError(
+                "Single-particle input must have shape (6,)"
+            )
+
+    elif v0.ndim == 2:
+        if v0.shape[1] != 6 or v0.shape[0] == 0:
+            raise ValueError(
+                "Multi-particle input must have shape (N, 6), N >= 1"
+            )
+
+    else:
+        raise ValueError(
+            "v0 must have shape (6,) or (N, 6)"
+        )
+
 
     if not v0.is_floating_point():
         raise TypeError("v0 must have a floating-point dtype")
@@ -144,12 +160,18 @@ def torch_track(
 
     jl_names = glue.to_any_vector(names)
 
-    return track_fn(
+    # Flatten coordinates without detaching them to preserve the PyTorch computation graph.
+    flat_coords = v0.reshape(-1)
+
+    flat_result = track_fn(
         jl_elements,
         jl_indices,
         jl_names,
-        v0,
+        flat_coords,
         strengths,
         bl.species_ref,
         bl.p_over_q_ref,
     )
+
+    # Restore the original particle dimensions
+    return flat_result.reshape(v0.shape)
