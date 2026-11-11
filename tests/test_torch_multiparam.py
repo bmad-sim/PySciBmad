@@ -33,7 +33,6 @@ def test_two_quadrupole_gradients():
     def track(a, b):
         return sb.torch_track(
             bl,
-            elements=elements,
             v0=coords,
             parameters=[
                 (qf, "Kn1", a),

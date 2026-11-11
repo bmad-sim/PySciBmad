@@ -23,7 +23,6 @@ jl.Base.include(glue, _tracking_path)
 def torch_track(
     bl,
     *,
-    elements,
     v0,
     parameters=None,
     quadrupole_index=None,
@@ -47,7 +46,7 @@ def torch_track(
     if not v0.is_floating_point():
         raise TypeError("v0 must have a floating-point dtype")
 
-    elements = list(elements)
+    elements = list(bl.line)
 
     # Preserve the previous single-quadrupole API.
     if parameters is None:
@@ -71,13 +70,12 @@ def torch_track(
         raise ValueError("parameters must not be empty")
 
     indices = []
+    names = []
     values = []
 
     for element, attribute, value in parameters:
-        if attribute != "Kn1":
-            raise NotImplementedError(
-                "Currently only Kn1 is supported"
-            )
+        if not isinstance(attribute, str) or not attribute:
+            raise TypeError("Parameter name must be a nonempty string")
 
         if not isinstance(value, torch.Tensor):
             raise TypeError(
@@ -95,10 +93,20 @@ def torch_track(
             )
 
         # Identify the element by Python object identity.
+        # Find child elements belonging to the original parent.
+        getindex = jl.seval("Base.getindex")
+        children = getindex(bl, unwrap(element))
+
         matches = [
-            i for i, candidate in enumerate(elements)
-            if candidate is element
+            int(child.beamline_index) - 1
+            for child in children
         ]
+
+        if len(matches) != 1:
+            raise ValueError(
+                "Expected exactly one child instance for this parameter; "
+                f"found {len(matches)}"
+            )
 
         if len(matches) != 1:
             raise ValueError(
@@ -108,12 +116,14 @@ def torch_track(
 
         index = matches[0]
 
-        if index in indices:
+        if (index, attribute) in zip(indices, names):
             raise ValueError(
-                "The same element was specified more than once"
+                f"Parameter {attribute!r} was specified more than once "
+                f"for element at index {index}"
             )
-
+        
         indices.append(index)
+        names.append(attribute)
         values.append(value.reshape(()))
 
     # Stack scalar tensors into one differentiable vector.
@@ -132,9 +142,12 @@ def torch_track(
         glue.torch_track_parameters
     )
 
+    jl_names = glue.to_any_vector(names)
+
     return track_fn(
         jl_elements,
         jl_indices,
+        jl_names,
         v0,
         strengths,
         bl.species_ref,
