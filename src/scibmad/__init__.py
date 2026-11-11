@@ -1,3 +1,9 @@
+from __future__ import annotations
+from ._runtime import LOOKUP_MODULES, SciBmad, jl
+import torch
+from ._torch_bridge import _JuliaTorchCallable
+from ._wrappers import Operand, unwrap, wrap
+
 """Python interface to the SciBmad.jl accelerator physics ecosystem.
 
 Basic usage::
@@ -20,8 +26,6 @@ it is not listed explicitly below -- it is looked up lazily and wrapped so that
 ``scibmad``'s deferred-parameter operands are unwrapped on the way in and
 re-wrapped on the way out.
 """
-
-from __future__ import annotations
 
 # Bootstrapping the runtime (and thus Julia + SciBmad) happens on import.
 from ._runtime import LOOKUP_MODULES, SciBmad, jl
@@ -63,10 +67,10 @@ _EXPLICIT = {
 
 __all__ = sorted(_EXPLICIT)
 
-
+""" COMMENT OUT FOR NOW, INTEGRATING TORCH
 def _make_passthrough(jl_callable):
-    """Wrap a Julia callable so Python operands are unwrapped in and results
-    (re)wrapped out."""
+    """"""Wrap a Julia callable so Python operands are unwrapped in and results
+    (re)wrapped out.""""""
 
     def _call(*args, **kwargs):
         a = [unwrap(x) for x in args]
@@ -74,7 +78,19 @@ def _make_passthrough(jl_callable):
         return wrap(jl_callable(*a, **k))
 
     return _call
+"""
 
+def _make_passthrough(jl_callable):
+    def _call(*args, **kwargs):
+        a = [unwrap(x) for x in args]
+        k = {key: unwrap(v) for key, v in kwargs.items()}
+
+        if any(isinstance(x, torch.Tensor) for x in a):
+            return _JuliaTorchCallable(jl_callable)(*a, **k)
+
+        return wrap(jl_callable(*a, **k))
+
+    return _call
 
 def __getattr__(attr):
     """Lazily surface any exported SciBmad name (PEP 562).
