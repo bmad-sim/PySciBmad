@@ -1,5 +1,5 @@
-
 using SciBmad
+import GTPSA
 
 function torch_track_quadrupole(
     elements,
@@ -176,6 +176,56 @@ function torch_track_parameters(
     SciBmad.track!(bunch, bl)
 
     return vec(permutedims(bunch.coords.v))
+end
+
+
+function torch_track_gtpsa_jacobian(
+    elements,
+    element_indices,
+    parameter_names,
+    coords,
+    strengths,
+    species_ref,
+    p_over_q_ref,
+)
+    n = length(strengths)
+
+    n > 0 ||
+        throw(ArgumentError("At least one parameter is required"))
+
+    # First-order Taylor expansion in the selected strengths.
+    d = GTPSA.Descriptor(n, 1)
+    delta = GTPSA.vars(d)
+
+    tps_strengths = [
+        GTPSA.TPS(Float64(strengths[j]); use=d) + delta[j]
+        for j in 1:n
+    ]
+
+    # Reuse the existing native SciBmad tracking function.
+    output = torch_track_parameters(
+        elements,
+        element_indices,
+        parameter_names,
+        coords,
+        tps_strengths,
+        species_ref,
+        p_over_q_ref,
+    )
+
+    # Extract the numerical output and selected coefficients.
+    values = Vector{Float64}(undef, length(output))
+    jac = Matrix{Float64}(undef, length(output), n)
+
+    for i in eachindex(output)
+        values[i] = output[i][0]
+
+        for j in 1:n
+            jac[i, j] = output[i][j]
+        end
+    end
+
+    return values, jac
 end
 
 

@@ -3,6 +3,7 @@ AUTODIFF_JULIA_CODE = '''
         using DifferentiationInterface
         import ForwardDiff
         using DifferentiationInterface: gradient, jacobian, derivative
+        import GTPSA
 
         scibmad_native(x::AbstractArray) = Array(x)
         scibmad_native(x) = x
@@ -212,6 +213,22 @@ AUTODIFF_JULIA_CODE = '''
                 backend,
                 [native_x]
             )
+        end
+
+        function scibmad_vjp_arg(f, backend, args, arg_index, x, cotangent)
+            native_args = scibmad_native_args(args)
+            native_x = scibmad_native(x)
+            native_cotangent = scibmad_native(cotangent)
+
+            scalar_loss = function (y)
+                output = scibmad_call_with_arg(
+                    f, native_args, arg_index, y
+                )
+
+                return sum(vec(output) .* vec(native_cotangent))
+            end
+
+            return gradient(scalar_loss, backend, native_x)
         end
 
         # Fix Jacobian erros w functions beliow 

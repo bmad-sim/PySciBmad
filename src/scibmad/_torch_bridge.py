@@ -9,7 +9,7 @@ from ._torch_autodiff import AUTODIFF_JULIA_CODE
 jl.seval(AUTODIFF_JULIA_CODE)
 
 def _resolve_backend(name):
-    """Resolve a backend name to a Julia AD backend."""
+    """Resolve the requested Julia AD backend."""
     if not isinstance(name, str):
         raise TypeError("Backend must be a string")
 
@@ -20,11 +20,15 @@ def _resolve_backend(name):
             "DifferentiationInterface.AutoForwardDiff()"
         )
 
+    if name == "gtpsa":
+        return jl.seval(
+            "DifferentiationInterface.AutoGTPSA()"
+        )
+
     raise ValueError(
         f"Unsupported AD backend: {name!r}. "
-        "Currently supported: forwarddiff"
+        "Supported backends: forwarddiff, gtpsa"
     )
-
 
 def _to_julia_input(x):
     """
@@ -67,7 +71,7 @@ def _to_numpy_output(result):
 class _JuliaFunction(torch.autograd.Function): # Custom torch.autograd.Function 
 
     @staticmethod
-    def forward(ctx, julia_func, tensor_arg_indices, backend, *args):
+    def forward(ctx, julia_func, tensor_arg_indices, backend, gtpsa_tracking, *args):
         """Runs julia_func on args, converting any tensor arguments to Julia-friendly values first, and stashes everything backward will need to compute gradients later
 
         Arguments:
@@ -98,6 +102,7 @@ class _JuliaFunction(torch.autograd.Function): # Custom torch.autograd.Function
 
         ctx.is_vector_output = is_vector_output
         ctx.backend = backend
+        ctx.gtpsa_tracking = gtpsa_tracking
         ctx.julia_func = julia_func
         ctx.jl_args = tuple(jl_args)
         ctx.tensor_arg_indices = tensor_arg_indices
@@ -205,17 +210,57 @@ class _JuliaFunction(torch.autograd.Function): # Custom torch.autograd.Function
 
             return torch.tensor(grad, dtype=x.dtype, device=x.device).reshape(x.shape)
 
+        
         arg_grads = [None] * ctx.num_args
 
+        if ctx.gtpsa_tracking and ctx.needs_input_grad[4 + 4]:
+            from ._runtime import glue
+
+            # Argument index 4 is the vector of magnet strengths.
+            strengths = next(
+                x for index, x in zip(ctx.tensor_arg_indices, tensor_args)
+                if index == 4
+            )
+
+            # Extract first-order GTPSA coefficients directly
+            # from SciBmad tracking.
+            _, jac = glue.torch_track_gtpsa_jacobian(*ctx.jl_args)
+
+            jac_np = np.asarray(jac, dtype=np.float64)
+
+            expected_shape = (grad_output_flat.size, strengths.numel())
+            if jac_np.shape != expected_shape:
+                raise RuntimeError(
+                    f"GTPSA Jacobian shape {jac_np.shape}, "
+                    f"expected {expected_shape}"
+                )
+
+            grad = jac_np.T @ grad_output_flat
+
+            arg_grads[4] = torch.as_tensor(
+                grad,
+                dtype=strengths.dtype,
+                device=strengths.device,
+            ).reshape(strengths.shape)
+
         for tensor_arg_index, x in zip(ctx.tensor_arg_indices, tensor_args):
-            arg_grads[tensor_arg_index] = grad_for_tensor_arg(tensor_arg_index, x)
+            if not ctx.needs_input_grad[4 + tensor_arg_index]:
+                continue
 
-        return None, None, None, *arg_grads
+            # Magnet-strength gradients were already obtained
+            # from direct GTPSA coefficient extraction.
+            if ctx.gtpsa_tracking and tensor_arg_index == 4:
+                continue
 
+            arg_grads[tensor_arg_index] = grad_for_tensor_arg(
+                tensor_arg_index, x
+            )
+
+        return None, None, None, None, *arg_grads
 
 class _JuliaTorchCallable: # wraps Julia-callable so tensor arguments get autograd support, plain arguments go straight to Julia w/ no autograd overhead
     
-    __slots__ = ("_fn", "_tracking", "_backend")
+    __slots__ = ("_fn", "_tracking", "_backend", "_gtpsa_tracking")
 
     def __init__(self, fn, tracking=False, backend="forwarddiff"):
         """
@@ -230,6 +275,12 @@ class _JuliaTorchCallable: # wraps Julia-callable so tensor arguments get autogr
         object.__setattr__(self, "_fn", fn)
         object.__setattr__(self, "_tracking", tracking)
         object.__setattr__(self, "_backend", _resolve_backend(backend))
+
+        object.__setattr__(
+            self,
+            "_gtpsa_tracking",
+            tracking and backend.lower() == "gtpsa",
+        )
 
     def __call__(self, *args, **kwargs):
         """
@@ -246,6 +297,8 @@ class _JuliaTorchCallable: # wraps Julia-callable so tensor arguments get autogr
         fn = object.__getattribute__(self, "_fn")
         tracking = object.__getattribute__(self, "_tracking")
         backend = object.__getattribute__(self, "_backend")
+        gtpsa_tracking = object.__getattribute__(self, "_gtpsa_tracking")
+
         tensor_arg_indices = [
             index for index, arg in enumerate(args)
             if isinstance(arg, torch.Tensor)
@@ -269,6 +322,7 @@ class _JuliaTorchCallable: # wraps Julia-callable so tensor arguments get autogr
                     bound_fn,
                     tuple(tensor_arg_indices),
                     backend,
+                    gtpsa_tracking,
                     *args
                 )
 
@@ -276,6 +330,7 @@ class _JuliaTorchCallable: # wraps Julia-callable so tensor arguments get autogr
                 fn,
                 tuple(tensor_arg_indices),
                 backend,
+                gtpsa_tracking,
                 *args
             )
         return fn(*args, **kwargs)
