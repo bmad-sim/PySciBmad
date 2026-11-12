@@ -27,6 +27,7 @@ def torch_track(
     parameters=None,
     quadrupole_index=None,
     kn1=None,
+    backend="forwarddiff",
 ):
     """Differentiable tracking through a SciBmad beamline.
 
@@ -155,8 +156,8 @@ def torch_track(
     )
 
     track_fn = _JuliaTorchCallable(
-        glue.torch_track_parameters
-    )
+        glue.torch_track_parameters, tracking=True,
+    backend=backend)
 
     jl_names = glue.to_any_vector(names)
 
@@ -175,3 +176,25 @@ def torch_track(
 
     # Restore the original particle dimensions
     return flat_result.reshape(v0.shape)
+
+class TorchTracker:
+    """Reusable differentiable tracker with a configured AD backend."""
+
+    def __init__(self, beamline, backend="forwarddiff"):
+        from ._torch_bridge import _resolve_backend
+
+        # Validate the backend immediately.
+        _resolve_backend(backend)
+
+        self.beamline = beamline
+        self.backend = backend
+
+    def __call__(self, *, v0, parameters=None, **kwargs):
+        return torch_track(
+            self.beamline,
+            v0=v0,
+            parameters=parameters,
+            backend=self.backend,
+            **kwargs,
+        )
+

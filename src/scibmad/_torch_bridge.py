@@ -8,6 +8,24 @@ from ._torch_autodiff import AUTODIFF_JULIA_CODE
 # when the PyTorch bridge is imported.
 jl.seval(AUTODIFF_JULIA_CODE)
 
+def _resolve_backend(name):
+    """Resolve a backend name to a Julia AD backend."""
+    if not isinstance(name, str):
+        raise TypeError("Backend must be a string")
+
+    name = name.lower()
+
+    if name == "forwarddiff":
+        return jl.seval(
+            "DifferentiationInterface.AutoForwardDiff()"
+        )
+
+    raise ValueError(
+        f"Unsupported AD backend: {name!r}. "
+        "Currently supported: forwarddiff"
+    )
+
+
 def _to_julia_input(x):
     """
     Converts a torch tensor into a plain value that Julia/juliacall can consume, for use as an argument to a Julia function call
@@ -49,7 +67,7 @@ def _to_numpy_output(result):
 class _JuliaFunction(torch.autograd.Function): # Custom torch.autograd.Function 
 
     @staticmethod
-    def forward(ctx, julia_func, tensor_arg_indices, tracking, *args):
+    def forward(ctx, julia_func, tensor_arg_indices, backend, *args):
         """Runs julia_func on args, converting any tensor arguments to Julia-friendly values first, and stashes everything backward will need to compute gradients later
 
         Arguments:
@@ -79,7 +97,7 @@ class _JuliaFunction(torch.autograd.Function): # Custom torch.autograd.Function
         result_np, is_vector_output = _to_numpy_output(result)
 
         ctx.is_vector_output = is_vector_output
-        ctx.backend = jl.scibmad_get_backend()
+        ctx.backend = backend
         ctx.julia_func = julia_func
         ctx.jl_args = tuple(jl_args)
         ctx.tensor_arg_indices = tensor_arg_indices
@@ -87,11 +105,12 @@ class _JuliaFunction(torch.autograd.Function): # Custom torch.autograd.Function
         ctx.num_args = len(args)
         ctx.save_for_backward(*tensor_args)
 
+        """
         ctx.backend = (
         jl.scibmad_get_tracking_backend()
         if tracking
         else jl.scibmad_get_backend()
-        )
+        ) """
 
         return torch.tensor(
             result_np,
@@ -196,9 +215,9 @@ class _JuliaFunction(torch.autograd.Function): # Custom torch.autograd.Function
 
 class _JuliaTorchCallable: # wraps Julia-callable so tensor arguments get autograd support, plain arguments go straight to Julia w/ no autograd overhead
     
-    __slots__ = ("_fn", "_tracking")
+    __slots__ = ("_fn", "_tracking", "_backend")
 
-    def __init__(self, fn, tracking = False):
+    def __init__(self, fn, tracking=False, backend="forwarddiff"):
         """
         Stores the wrapped Julia callable
 
@@ -210,6 +229,7 @@ class _JuliaTorchCallable: # wraps Julia-callable so tensor arguments get autogr
         """
         object.__setattr__(self, "_fn", fn)
         object.__setattr__(self, "_tracking", tracking)
+        object.__setattr__(self, "_backend", _resolve_backend(backend))
 
     def __call__(self, *args, **kwargs):
         """
@@ -225,6 +245,7 @@ class _JuliaTorchCallable: # wraps Julia-callable so tensor arguments get autogr
         """
         fn = object.__getattribute__(self, "_fn")
         tracking = object.__getattribute__(self, "_tracking")
+        backend = object.__getattribute__(self, "_backend")
         tensor_arg_indices = [
             index for index, arg in enumerate(args)
             if isinstance(arg, torch.Tensor)
@@ -240,18 +261,23 @@ class _JuliaTorchCallable: # wraps Julia-callable so tensor arguments get autogr
                 raise TypeError(
                         f"Tensor keyword arguments are not supported yet: {names}"
                     )
-
+            
             if kwargs:
                 bound_fn = jl.scibmad_bind_kwargs(fn, kwargs)
 
                 return _JuliaFunction.apply(
-                bound_fn,
+                    bound_fn,
+                    tuple(tensor_arg_indices),
+                    backend,
+                    *args
+                )
+
+            return _JuliaFunction.apply(
+                fn,
                 tuple(tensor_arg_indices),
-                tracking,
+                backend,
                 *args
             )
-            return _JuliaFunction.apply(fn, tuple(tensor_arg_indices), tracking, *args)
-
         return fn(*args, **kwargs)
 
     def __getattr__(self, name):

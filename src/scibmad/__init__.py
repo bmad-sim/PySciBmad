@@ -62,6 +62,8 @@ _EXPLICIT = {
     "twiss",
     "elements",
     "name",
+    "torch_track",
+    "TorchTracker",
     *MATH_FUNCTIONS.keys(),
 }
 
@@ -144,4 +146,10 @@ def torch_track(*args, **kwargs):
         raise
 
     return _track(*args, **kwargs)
+
+
+def TorchTracker(*args, **kwargs):
+    from ._torch_tracking import TorchTracker as _TorchTracker
+    return _TorchTracker(*args, **kwargs)
+
 
