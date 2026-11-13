@@ -47,3 +47,18 @@ print("Gradient:", k1.grad.item())
 assert result.shape == (6,)
 assert k1.grad is not None
 assert torch.isfinite(k1.grad)
+
+h = 1e-5
+
+def final_x(strength):
+    with torch.no_grad():
+        return sb.torch_track(
+            bl,
+            v0=coords,
+            quadrupole_index=0,
+            kn1=torch.tensor(strength),
+        )[0].item()
+
+grad_fd = (final_x(0.36 + h) - final_x(0.36 - h)) / (2 * h)
+
+assert abs(k1.grad.item() - grad_fd) < 1e-8

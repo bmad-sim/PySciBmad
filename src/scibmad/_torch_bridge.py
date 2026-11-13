@@ -110,13 +110,6 @@ class _JuliaFunction(torch.autograd.Function): # Custom torch.autograd.Function
         ctx.num_args = len(args)
         ctx.save_for_backward(*tensor_args)
 
-        """
-        ctx.backend = (
-        jl.scibmad_get_tracking_backend()
-        if tracking
-        else jl.scibmad_get_backend()
-        ) """
-
         return torch.tensor(
             result_np,
             dtype=tensor_args[0].dtype,
@@ -260,7 +253,7 @@ class _JuliaFunction(torch.autograd.Function): # Custom torch.autograd.Function
 
 class _JuliaTorchCallable: # wraps Julia-callable so tensor arguments get autograd support, plain arguments go straight to Julia w/ no autograd overhead
     
-    __slots__ = ("_fn", "_tracking", "_backend", "_gtpsa_tracking")
+    __slots__ = ("_fn", "_backend", "_gtpsa_tracking")
 
     def __init__(self, fn, tracking=False, backend="forwarddiff"):
         """
@@ -273,7 +266,6 @@ class _JuliaTorchCallable: # wraps Julia-callable so tensor arguments get autogr
         - (none)
         """
         object.__setattr__(self, "_fn", fn)
-        object.__setattr__(self, "_tracking", tracking)
         object.__setattr__(self, "_backend", _resolve_backend(backend))
 
         object.__setattr__(
@@ -295,7 +287,6 @@ class _JuliaTorchCallable: # wraps Julia-callable so tensor arguments get autogr
         - result: either the raw Julia/NumPy result (no-tensor path) or a differentiable torch.Tensor (tensor path)
         """
         fn = object.__getattribute__(self, "_fn")
-        tracking = object.__getattribute__(self, "_tracking")
         backend = object.__getattribute__(self, "_backend")
         gtpsa_tracking = object.__getattribute__(self, "_gtpsa_tracking")
 
@@ -371,52 +362,3 @@ class _JuliaTorchCallable: # wraps Julia-callable so tensor arguments get autogr
         - repr_str: the repr of the wrapped Julia function
         """
         return repr(object.__getattribute__(self, "_fn"))
-
-
-#### """DA STUFF"""
-
-class _JuliaValueGradFunction(torch.autograd.Function):
-    """
-    Julia function must return:
-        value, gradient
-
-    where gradient is d(value)/d(x).
-    """
-
-    @staticmethod
-    def forward(ctx, julia_func, x):
-        jl_x, _ = _to_julia_input(x)
-
-        value, grad = julia_func(jl_x)
-
-        grad_np = np.asarray(grad, dtype=float)
-
-        ctx.save_for_backward(
-            torch.tensor(
-                grad_np,
-                dtype=x.dtype,
-                device=x.device,
-            ).reshape(x.shape)
-        )
-
-        return torch.tensor(
-            float(value),
-            dtype=x.dtype,
-            device=x.device,
-        )
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        (saved_grad,) = ctx.saved_tensors
-
-        return None, grad_output * saved_grad
-
-class _JuliaValueGradCallable:
-    def __init__(self, fn):
-        self._fn = fn
-
-    def __call__(self, x):
-        if isinstance(x, torch.Tensor):
-            return _JuliaValueGradFunction.apply(self._fn, x)
-
-        return self._fn(x)

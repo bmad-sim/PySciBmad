@@ -125,12 +125,6 @@ def torch_track(
                 f"found {len(matches)}"
             )
 
-        if len(matches) != 1:
-            raise ValueError(
-                "Each parameter must identify exactly one "
-                "element in the supplied elements list"
-            )
-
         index = matches[0]
 
         if (index, attribute) in zip(indices, names):

@@ -46,10 +46,6 @@ def test_two_quadrupole_gradients():
     loss = result[0]
     loss.backward()
 
-    print("Final coordinates:", result)
-    print("Gradient QF:", k1.grad.item())
-    print("Gradient QD:", k2.grad.item())
-
     assert result.shape == (6,)
     assert k1.grad is not None
     assert k2.grad is not None
@@ -69,9 +65,6 @@ def test_two_quadrupole_gradients():
             track(k1, k2 + h)[0]
             - track(k1, k2 - h)[0]
         ) / (2 * h)
-
-    print("FD gradient QF:", fd1.item())
-    print("FD gradient QD:", fd2.item())
 
     torch.testing.assert_close(
         k1.grad, fd1, rtol=1e-5, atol=1e-9
