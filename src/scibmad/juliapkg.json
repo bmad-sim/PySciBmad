@@ -8,6 +8,15 @@
         "PythonCall": {
             "uuid": "6099a3de-0909-46bc-b1f4-468b9a2dfc0d",
             "version": "0.9"
-        }
+        },
+	"DifferentiationInterface": {
+    		"uuid": "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
+	},
+	"ForwardDiff": {
+    		"uuid": "f6369f11-7733-5829-9624-2563aa707210"
+	},
+	"GTPSA": {
+    		"uuid": "b27dd330-f138-47c5-815b-40db9dd9b6e8"
+	}	
     }
 }

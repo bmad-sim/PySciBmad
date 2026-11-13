@@ -14,6 +14,8 @@ import types
 from ._runtime import SciBmad, UNARY_OP, glue, jl
 from ._wrappers import Operand, unwrap, wrap
 
+import sys
+
 __all__ = [
     "DefExpr",
     "TimeDependentParam",
@@ -214,12 +216,23 @@ def elements(mapping=None, /, **kwargs):
 
 
 # --- top-level math functions ------------------------------------------------
-
+"""
 def _make_unary(jl_fn):
     def _fn(x):
         return wrap(jl_fn(unwrap(x)))
-    return _fn
+    return _fn"""
 
+def _make_unary(jl_fn):
+    def _fn(x):
+        torch = sys.modules.get("torch")
+
+        if torch is not None and isinstance(x, torch.Tensor):
+            from ._torch_bridge import _JuliaTorchCallable
+            return _JuliaTorchCallable(jl_fn)(x)
+
+        return wrap(jl_fn(unwrap(x)))
+
+    return _fn
 
 # Populated into the package namespace by __init__ (sin, cos, sqrt, ...).
 MATH_FUNCTIONS = {n: _make_unary(fn) for n, fn in UNARY_OP.items()}
