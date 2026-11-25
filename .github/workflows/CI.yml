@@ -24,14 +24,14 @@ jobs:
         julia: ['1']
         include:
           - os: ubuntu-latest
-            python: '3.9'
+            python: '3.10'
             julia: 'lts'
     steps:
-      - uses: actions/checkout@v4
-      - uses: julia-actions/setup-julia@v2
+      - uses: actions/checkout@v7
+      - uses: julia-actions/setup-julia@v3
         with:
           version: ${{ matrix.julia }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
       - name: Julia environment with SciBmad and PythonCall
