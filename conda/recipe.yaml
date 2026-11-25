@@ -1,0 +1,53 @@
+# rattler-build recipe for the conda package `pyscibmad` (channel bmad-sim).
+#
+# The Python package, and with it the SciBmad distribution of the same channel (package
+# `scibmad`): a Julia with SciBmad and the packages it uses precompiled, which `scibmad` finds in
+# the conda environment and runs (src/scibmad/_runtime.py). juliacall comes from conda-forge
+# (`pyjuliacall`); with the distribution, the copy of juliacall that comes with its PythonCall
+# is the one used, so that the two always match.
+#
+# Build, from the repository root:
+#     rattler-build build --recipe conda --output-dir build/conda
+#
+# The `scibmad` requirement follows the SciBmad.jl version of this release
+# (src/scibmad/_runtime.py: SCIBMAD_VERSION, SUPPORTED): update both together.
+
+context:
+  version: "0.8.0"  # = src/scibmad/_version.py
+
+package:
+  name: pyscibmad
+  version: ${{ version }}
+
+source:
+  path: ..
+
+build:
+  noarch: python
+  number: 0
+  script: python -m pip install . --no-deps --no-build-isolation -vv
+
+requirements:
+  host:
+    - python >=3.10
+    - pip
+    - hatchling
+  run:
+    - python >=3.10
+    - numpy >=1.21
+    - pyjuliacall >=0.9.24
+    - scibmad >=0.8,<0.9
+
+tests:
+  - python:
+      imports:
+        - scibmad
+      pip_check: false
+
+about:
+  homepage: https://github.com/bmad-sim/PySciBmad
+  repository: https://github.com/bmad-sim/PySciBmad
+  documentation: https://bmad-sim.github.io/SciBmad.jl
+  summary: SciBmad from Python (charged particle beam dynamics, on CPUs and GPUs)
+  license: GPL-3.0-or-later
+  license_file: LICENSE
