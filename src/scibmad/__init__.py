@@ -1,109 +1,132 @@
-"""Python interface to the SciBmad.jl accelerator physics ecosystem.
+"""SciBmad from Python.
 
-Basic usage::
+``import scibmad as sb`` gives every name of the Julia package SciBmad (and of the packages it
+re-exports: Beamlines, BeamTracking, GTPSA, NonlinearNormalForm, ...): ``sb.Quadrupole``,
+``sb.Beamline``, ``sb.twiss``, ``sb.track``, ... Julia's ``f!`` is ``sb.f_`` (``sb.match`` and a
+few other functions also have their name without the ``!``). Julia starts on first use.
 
-    import scibmad as sb
+What Python writes differently (all of it is described in the documentation, with the Julia
+form next to the Python one):
 
-    qf = sb.Quadrupole(Kn1=0.36, L=0.5)
-    qd = sb.Quadrupole(Kn1=-0.36, L=0.5)
-    d = sb.Drift(L=1.0)
+* ``@elements`` is ``with sb.elements(): ...``; ``@knob(qf.Kn1)`` is ``sb.Knob(qf, "Kn1")``;
+* indexing with keywords is a call: Julia's ``res.x[qd, turn=2]`` is ``res.x(qd, turn=2)``;
+* ``end``/``begin`` in indexing are ``-1`` (or ``sb.end``, ``sb.end - 1``) and ``sb.begin``;
+  ``:`` is ``:`` in brackets and ``...`` (or ``slice(None)``) elsewhere; an s-range ``(a, b)``
+  is the slice ``a:b`` of floats;
+* ``DefExpr(c -> -c.kq)`` is ``sb.DefExpr(lambda c: -c.kq)`` (traced into a Julia expression);
+* ``withvalues(c; k=v) do ... end`` is ``with sb.withvalues(c, k=v): ...``;
+* GPU arrays come from ``sb.device("cuda").asarray(...)`` (or "metal", "amdgpu", "oneapi").
 
-    bl = sb.Beamline([qf, d, qd, d], species_ref=sb.Species("electron"),
-                     E_ref=18e9)
-
-    tw = sb.twiss(bl)
-
-Any exported name of the ``SciBmad`` Julia module (element types like
-``Quadrupole``/``Sextupole``/``SBend``, functions like ``track``,
-``find_closed_orbit``, constants, ...) is available as ``scibmad.<name>`` even if
-it is not listed explicitly below -- it is looked up lazily and wrapped so that
-``scibmad``'s deferred-parameter operands are unwrapped on the way in and
-re-wrapped on the way out.
+Integers that number the elements of a beamline (beamline indexes, ``bl[1]``, ``tw.beta1[3]``)
+and particles start at 1, as in Julia; NumPy arrays start at 0, as always in Python.
 """
 
 from __future__ import annotations
 
-# Bootstrapping the runtime (and thus Julia + SciBmad) happens on import.
-from ._runtime import LOOKUP_MODULES, SciBmad, jl
-from ._wrappers import Operand, unwrap, wrap
-from ._api import (
-    BatchParam,
-    Beamline,
-    DefExpr,
-    MATH_FUNCTIONS,
-    Time,
-    TimeDependentParam,
-    elements,
-    name,
-    twiss,
-)
+from ._version import __version__
+from ._runtime import SCIBMAD_VERSION, JuliaNotFoundError
+from . import _core
+from ._core import (JuliaArray, JuliaCallable, JuliaCollection, JuliaError, JuliaModule,
+                    JuliaNumber, JuliaObject, Symbol, begin, end)
+from ._extras import PerformanceWarning, elements, julia, withvalues
+from ._gpu import Device, device
 
-# Expose the top-level math functions (sin, cos, sqrt, ...) that understand both
-# plain numbers and scibmad operands.
-globals().update(MATH_FUNCTIONS)
+try:  # (so that `import juliacall` after `import scibmad` starts the same Julia)
+    from . import _runtime as _rt
+    _rt.prepare()
+except Exception as _e:  # reported when Julia is started
+    _rt.STATE["prepare_error"] = _e
 
-# Names defined in this module (so __getattr__ is only a fallback for SciBmad
-# pass-through) and the curated public surface.
-_EXPLICIT = {
-    "jl",
-    "SciBmad",
-    "Operand",
-    "unwrap",
-    "wrap",
-    "DefExpr",
-    "TimeDependentParam",
-    "BatchParam",
-    "Time",
-    "Beamline",
-    "twiss",
-    "elements",
-    "name",
-    *MATH_FUNCTIONS.keys(),
+# Python names of Julia functions named f! (also available as f_)
+ALIASES = {
+    "match": "match!",
+    "undo": "undo!",
+    "setknobs": "setknobs!",
+    "phase_trombone": "phase_trombone!",
+    "scalarize": "scalarize!",
 }
 
-__all__ = sorted(_EXPLICIT)
+_PYTHON_NAMES = {
+    "__version__", "SCIBMAD_VERSION", "JuliaNotFoundError", "JuliaArray", "JuliaCallable",
+    "JuliaCollection", "JuliaError", "JuliaModule", "JuliaNumber", "JuliaObject", "Symbol",
+    "begin", "end", "PerformanceWarning", "elements", "julia", "withvalues", "Device",
+    "device", "init", "info", "options", "DefExpr",
+}
 
 
-def _make_passthrough(jl_callable):
-    """Wrap a Julia callable so Python operands are unwrapped in and results
-    (re)wrapped out."""
+def init(julia=None, project=None, threads=None):
+    """Starts Julia and loads SciBmad (otherwise done on the first use of a SciBmad name).
 
-    def _call(*args, **kwargs):
-        a = [unwrap(x) for x in args]
-        k = {key: unwrap(v) for key, v in kwargs.items()}
-        return wrap(jl_callable(*a, **k))
-
-    return _call
-
-
-def __getattr__(attr):
-    """Lazily surface any exported SciBmad name (PEP 562).
-
-    Callables (functions, element/type constructors) are wrapped to handle
-    operand (un)wrapping; other values are returned as juliacall gives them.
+    julia:   a Julia executable (default: see ``scibmad.info()`` and the documentation)
+    project: the Julia project in which SciBmad is installed (needed with `julia`, unless it is
+             the SciBmad distribution's Julia)
+    threads: the number of Julia threads (an int or "auto"); only before Julia has started
     """
-    if attr.startswith("__") and attr.endswith("__"):
-        raise AttributeError(attr)
-    # Try SciBmad first, then the subpackages -- this resolves names that are
-    # ambiguous at the reexport level (e.g. Context) to the accelerator-facing one.
-    _MISSING = object()
-    obj = _MISSING
-    for module in LOOKUP_MODULES:
+    from . import _runtime
+    _runtime.STATE.pop("prepare_error", None)
+    _runtime.start(julia=julia, project=project, threads=threads)
+    _core._init()
+
+
+def info():
+    """Which Julia and SciBmad.jl run SciBmad for Python."""
+    from . import _runtime
+    _core._init()
+    return _runtime.info()
+
+
+class _Options:
+    """Display options: ``scibmad.options.display_width`` and ``display_height`` (characters;
+    default: the terminal's size, 120 x 40 in notebooks)."""
+
+    def __getattr__(self, name):
         try:
-            obj = getattr(module, attr)
-            break
-        except Exception:  # noqa: BLE001 - ambiguous/undefined here; try next module
-            continue
-    if obj is _MISSING:
-        raise AttributeError(
-            f"module 'scibmad' has no attribute {attr!r} "
-            f"(no such export in SciBmad or its subpackages)"
-        )
-    if callable(obj):
-        return _make_passthrough(obj)
-    return obj
+            return _core._OPTIONS[name]
+        except KeyError:
+            raise AttributeError(name) from None
+
+    def __setattr__(self, name, value):
+        if name not in _core._OPTIONS:
+            raise AttributeError(f"Unknown option {name!r}")
+        _core._OPTIONS[name] = value
+
+    def __repr__(self):
+        return f"scibmad.options({_core._OPTIONS})"
+
+
+options = _Options()
+
+_DEFEXPR = None
+
+
+def __getattr__(name):
+    """The names of SciBmad (loaded on first use)."""
+    if name.startswith("__"):
+        raise AttributeError(name)
+    _core._init()
+    G, jl = _core.G, _core.jl
+    if name == "DefExpr":
+        global _DEFEXPR
+        if _DEFEXPR is None:
+            from ._extras import _DefExprType
+            _DEFEXPR = _DefExprType.__new__(_DefExprType)
+            object.__setattr__(_DEFEXPR, "_jl", G.getname(jl.SciBmad, jl.Symbol("DefExpr")))
+        return _DEFEXPR
+    jname = ALIASES.get(name)
+    s = jl.Symbol(jname) if jname is not None else G.jlname(jl.SciBmad, name)
+    if s is None:
+        raise AttributeError(f"SciBmad has no name {name!r}")
+    v = _core.wrap(_core._jcall(G.getname, jl.SciBmad, s))
+    if isinstance(v, (JuliaCallable, JuliaModule)):
+        globals()[name] = v  # (functions, types and modules do not change)
+    return v
 
 
 def __dir__():
-    extra = [str(n) for n in jl.names(SciBmad)]
-    return sorted(_EXPLICIT.union(extra))
+    names = set(_PYTHON_NAMES) | set(ALIASES)
+    try:
+        _core._init()
+        names |= {str(n) for n in _core.G.pynames(_core.jl.SciBmad) if str(n).isidentifier()}
+    except Exception:
+        pass
+    return sorted(names)
