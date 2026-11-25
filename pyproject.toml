@@ -34,6 +34,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest >=7"]
+torch = ["torch >=2.0", "numpy >=1.26"]
 
 [project.urls]
 # These must point at the Python package's own repo: PyPI renders them in the
@@ -46,6 +47,7 @@ Issues = "https://github.com/bmad-sim/PySciBmad/issues"
 "SciBmad.jl (Julia)" = "https://github.com/bmad-sim/SciBmad.jl"
 
 [tool.hatch.build.targets.wheel]
+"src/scibmad/_torch_tracking.jl" = "scibmad/_torch_tracking.jl"
 packages = ["src/scibmad"]
 
 # Ship the Julia dependency manifest inside the package so juliapkg finds it.

@@ -141,6 +141,29 @@ sb.unwrap, sb.wrap
   loaded at import time. This keeps the Python package working against the
   *registered* Julia packages today.
 
+## Examples
+
+### 18 GeV ESR Closed-Orbit Optimization
+
+The [ESR closed-orbit example](examples/esr_closed_orbit_example.py)
+demonstrates differentiable particle tracking and gradient-based
+optimization using PySciBmad, PyTorch, and ReverseDiff.
+
+The example tracks an electron through the approximately 6,400-element
+Electron Storage Ring lattice and optimizes its initial transverse
+coordinates to minimize the one-turn closed-orbit residual.
+
+ReverseDiff gradients were validated against central finite differences,
+and PySciBmad reproduces SciBmad's native closed orbit to numerical
+precision.
+
+**Requirements:** The publicly available `esr-v6.3.1.jl` lattice file
+must be accessible from the working directory, or the include path
+must be adjusted accordingly.
+
+**Note:** The example demonstrates optimization progress but does not
+fully converge to the closed orbit within the configured 100 iterations.
+
 ### Recommended upstream (Julia) changes
 
 Per [SciBmad.jl#76](https://github.com/bmad-sim/SciBmad.jl/issues/76), the glue
